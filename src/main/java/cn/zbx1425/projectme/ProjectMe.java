@@ -3,8 +3,8 @@ package cn.zbx1425.projectme;
 import cn.zbx1425.projectme.client.ProjectMeClient;
 import cn.zbx1425.projectme.compat.ICompatibility;
 import cn.zbx1425.projectme.compat.impl.MTRCompatibility;
+import cn.zbx1425.projectme.compat.impl.VanillaCompatibility;
 import cn.zbx1425.projectme.entity.EntityProjection;
-import cn.zbx1425.projectme.entity.PlayerContext;
 import cn.zbx1425.projectme.sync.Synchronizer;
 import net.minecraft.Util;
 import net.minecraft.core.UUIDUtil;
@@ -26,7 +26,6 @@ import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
-import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.registries.NeoForgeRegistries;
 import org.slf4j.Logger;
@@ -54,14 +53,11 @@ public class ProjectMe {
 
     private static final DeferredRegister<AttachmentType<?>> ATTACHMENT_TYPES = DeferredRegister.create(NeoForgeRegistries.ATTACHMENT_TYPES, MOD_ID);
 
-    private static final DeferredHolder<AttachmentType<?>, AttachmentType<PlayerContext>> CONTEXT = ATTACHMENT_TYPES.register(
-            "context", () -> AttachmentType.builder(() -> new PlayerContext(true)).serialize(PlayerContext.SERIALIZER).build()
-    );
-
     public static final ServerConfig CONFIG = new ServerConfig();
     public static Synchronizer synchronizer;
 
     private static final List<ICompatibility> COMPATIBILITIES = Util.make(new ArrayList<>(), l -> {
+        l.add(new VanillaCompatibility());
         if (ModList.get().isLoaded("mtr")) {
             l.add(new MTRCompatibility());
         }
@@ -79,7 +75,7 @@ public class ProjectMe {
         }
     }
 
-    private static boolean computePlayerVisibility(ServerPlayer player) {
+    public static boolean computePlayerVisibility(ServerPlayer player) {
         for (ICompatibility compatibility : COMPATIBILITIES) {
             if (!compatibility.shouldDisplayPlayer(player)) {
                 return false;
@@ -117,19 +113,7 @@ public class ProjectMe {
         public static void onServerTick(ServerTickEvent.Pre event) {
             if (synchronizer == null) return;
             if (event.getServer().getTickCount() % CONFIG.syncInterval.value == 0) {
-                for (ServerPlayer player : event.getServer().getPlayerList().getPlayers()) {
-                    boolean v = player.getData(CONTEXT).visibility();
-                    boolean v1 = computePlayerVisibility(player);
-                    if (v1) {
-                        synchronizer.notifyPlayerPresence(player);
-                    } else if (v) {
-                        synchronizer.notifyPlayerAbsence(player.getGameProfile().getId());
-                    }
-
-                    if (v != v1) {
-                        player.setData(CONTEXT, new PlayerContext(v1));
-                    }
-                }
+                synchronizer.notifyPlayerPresence(event.getServer().getPlayerList().getPlayers());
                 // synchronizer.mockPlayerPresence(new Vec3(random.nextDouble(-5, 5), -60, random.nextDouble(-5, 5)));
             }
         }
@@ -137,9 +121,7 @@ public class ProjectMe {
         @SubscribeEvent
         public static void onPlayerLeave(PlayerEvent.PlayerLoggedOutEvent event) {
             if (synchronizer == null) return;
-            if (event.getEntity().getData(CONTEXT).visibility()) {
-                synchronizer.notifyPlayerAbsence(event.getEntity().getGameProfile().getId());
-            }
+            synchronizer.notifyPlayerAbsence(event.getEntity().getGameProfile().getId());
         }
     }
 

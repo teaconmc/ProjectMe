@@ -12,6 +12,7 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
+import net.neoforged.neoforge.common.NeoForge;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -20,6 +21,7 @@ import java.util.UUID;
 public class ProjectMeClient {
 
     public ProjectMeClient(IEventBus eventBus) {
+        NeoForge.EVENT_BUS.register(ForgeEventBusListener.class);
         eventBus.register(ModEventBusListener.class);
     }
 
@@ -35,12 +37,7 @@ public class ProjectMeClient {
         }
     }
 
-    public static class ModEventBusListener {
-
-        @SubscribeEvent
-        public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
-            event.registerEntityRenderer(ProjectMe.ENTITY_PROJECTION.get(), EntityProjectionRenderer::new);
-        }
+    public static class ForgeEventBusListener {
 
         @SubscribeEvent
         public static void clientTick(ClientTickEvent.Pre event) {
@@ -59,6 +56,14 @@ public class ProjectMeClient {
 
                 Objects.requireNonNull(Minecraft.getInstance().getConnection()).sendCommand("/go " + projection.getName());
             }
+        }
+    }
+
+    public static class ModEventBusListener {
+
+        @SubscribeEvent
+        public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
+            event.registerEntityRenderer(ProjectMe.ENTITY_PROJECTION.get(), EntityProjectionRenderer::new);
         }
     }
 }

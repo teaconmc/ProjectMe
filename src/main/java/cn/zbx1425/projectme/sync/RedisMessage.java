@@ -22,86 +22,95 @@ public class RedisMessage {
 
     public long initiator;
     public Action action;
-    public ByteBuf content;
+    public FriendlyByteBuf content;
 
-    public RedisMessage(Action action, ByteBuf content) {
-        this.initiator = INSTANCE_ID;
-        this.action = action;
-        this.content = content;
+    private RedisMessage(Action action) {
+        this(action, INSTANCE_ID);
     }
 
-    public RedisMessage(Action action, ByteBuf content, long initiator) {
+    private RedisMessage(Action action, long initiator) {
         this.initiator = initiator;
         this.action = action;
-        this.content = content;
+        this.content = new FriendlyByteBuf(Unpooled.buffer());
+        content.writeByte(action.ordinal());
+        content.writeLong(initiator);
     }
 
-    public RedisMessage(ByteBuf src) {
-        this.action = Action.values()[src.readByte()];
-        this.initiator = src.readLong();
-        int length = src.readInt();
-        this.content = src.readBytes(length);
+    protected RedisMessage(ByteBuf src) {
+        this.content = new FriendlyByteBuf(src);
+        this.action = Action.values()[content.readByte()];
+        this.initiator = content.readLong();
     }
 
-    public static RedisMessage playerPresence(ServerPlayer player) {
-        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
-        buffer.writeUUID(player.getGameProfile().getId());
-        buffer.writeUtf(player.getDisplayName().getString());
-        buffer.writeResourceKey(player.level().dimension());
-        buffer.writeVec3(player.position());
-        buffer.writeFloat(player.getYHeadRot());
-        buffer.writeFloat(player.getYRot());
-        buffer.writeFloat(player.getXRot());
-        return new RedisMessage(Action.PLAYER_PRESENCE, buffer);
+    public static RedisMessage beginPlayerPresence(int playerCount) {
+        RedisMessage result = new RedisMessage(Action.PLAYER_PRESENCE);
+        result.content.writeVarInt(playerCount);
+        return result;
+    }
+
+    public RedisMessage andWithPlayer(ServerPlayer player, boolean isVisible) {
+        content.writeUUID(player.getGameProfile().getId());
+        content.writeBoolean(isVisible);
+        if (isVisible) {
+            content.writeUtf(player.getDisplayName().getString());
+            content.writeResourceKey(player.level().dimension());
+            content.writeVec3(player.position());
+            content.writeFloat(player.getYHeadRot());
+            content.writeFloat(player.getYRot());
+            content.writeFloat(player.getXRot());
+        }
+        return this;
     }
 
     private static final UUID MOCK_PLAYER_UUID = UUID.fromString("8f50bdf3-cb09-4e29-ab76-dc1cf9db86a1");
     public static RedisMessage mockPlayerPresence(Vec3 position) {
-        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
-        buffer.writeUUID(MOCK_PLAYER_UUID);
-        buffer.writeUtf("MalayP");
-        buffer.writeResourceKey(Level.OVERWORLD);
-        buffer.writeVec3(position);
-        buffer.writeFloat(0);
-        buffer.writeFloat(0);
-        buffer.writeFloat(0);
-        return new RedisMessage(Action.PLAYER_PRESENCE, buffer, 0);
+        RedisMessage result = beginPlayerPresence(1);
+        result.content.writeUUID(MOCK_PLAYER_UUID);
+        result.content.writeBoolean(true);
+        result.content.writeUtf("MalayP");
+        result.content.writeResourceKey(Level.OVERWORLD);
+        result.content.writeVec3(position);
+        result.content.writeFloat(0);
+        result.content.writeFloat(0);
+        result.content.writeFloat(0);
+        return result;
     }
 
     public static RedisMessage playerAbsence(UUID uuid) {
-        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
-        buffer.writeUUID(uuid);
-        return new RedisMessage(Action.PLAYER_ABSENCE, buffer);
+        RedisMessage result = new RedisMessage(Action.PLAYER_ABSENCE);
+        result.content.writeUUID(uuid);
+        return result;
     }
 
     public void publishAsync(StatefulRedisConnection<String, ByteBuf> connection) {
-        ByteBuf buffer = Unpooled.buffer(content.readableBytes() + 16);
-        buffer.writeByte(action.ordinal());
-        buffer.writeLong(initiator);
-        buffer.writeInt(content.readableBytes());
-        buffer.writeBytes(content);
-        connection.async().publish(COMMAND_CHANNEL, buffer);
+        connection.async().publish(COMMAND_CHANNEL, content);
     }
 
     public void handle(Synchronizer synchronizer) throws IOException {
         if (isFromSelf()) return;
         switch (action) {
             case PLAYER_PRESENCE: {
-                FriendlyByteBuf buffer = new FriendlyByteBuf(content);
-                UUID player = buffer.readUUID();
-                String playerName = buffer.readUtf();
-                ResourceKey<Level> level = buffer.readResourceKey(Registries.DIMENSION);
-                Vec3 position = buffer.readVec3();
-                float yRotHead = buffer.readFloat();
-                float yRotBody = buffer.readFloat();
-                float xRot = buffer.readFloat();
-                synchronizer.handlePlayerPresence(player, playerName, level, position,
-                        yRotHead, yRotBody, xRot);
+                int playerCount = content.readVarInt();
+                for (int i = 0; i < playerCount; i++) {
+                    UUID player = content.readUUID();
+                    boolean isVisible = content.readBoolean();
+                    if (isVisible) {
+                        String playerName = content.readUtf();
+                        ResourceKey<Level> level = content.readResourceKey(Registries.DIMENSION);
+                        Vec3 position = content.readVec3();
+                        float yRotHead = content.readFloat();
+                        float yRotBody = content.readFloat();
+                        float xRot = content.readFloat();
+                        synchronizer.handlePlayerPresence(player, playerName, level, position,
+                                yRotHead, yRotBody, xRot);
+                    } else {
+                        synchronizer.handlePlayerAbsence(player);
+                    }
+                }
                 break;
             }
             case PLAYER_ABSENCE: {
-                FriendlyByteBuf buffer = new FriendlyByteBuf(content);
-                UUID player = buffer.readUUID();
+                UUID player = content.readUUID();
                 synchronizer.handlePlayerAbsence(player);
                 break;
             }

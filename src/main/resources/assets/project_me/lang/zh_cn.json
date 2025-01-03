@@ -1,4 +1,4 @@
 {
-  "project_me.projection_entity.tooltip": "来自其他世界的投影",
-  "project_me.projection_entity.goto": "来自其他世界的投影，对他双击右键以传送到他的世界"
+  "project_me.projection_entity.tooltip": "位于另一个分服务器的玩家",
+  "project_me.projection_entity.goto": "双击右键前往他所在的服务器，以便与他交互"
 }

@@ -22,6 +22,7 @@ import net.minecraft.world.phys.Vec3;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -45,8 +46,13 @@ public class Synchronizer implements AutoCloseable {
         this.server = server;
     }
 
-    public void notifyPlayerPresence(ServerPlayer player) {
-        RedisMessage.playerPresence(player).publishAsync(redisConn);
+    public void notifyPlayerPresence(List<ServerPlayer> player) {
+        RedisMessage playerPresence = RedisMessage.beginPlayerPresence(player.size());
+        for (ServerPlayer p : player) {
+            boolean v1 = ProjectMe.computePlayerVisibility(p);
+            playerPresence.andWithPlayer(p, v1);
+        }
+        playerPresence.publishAsync(redisConn);
     }
 
     public void mockPlayerPresence(Vec3 position) {
