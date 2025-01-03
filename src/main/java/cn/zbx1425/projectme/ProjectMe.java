@@ -1,5 +1,6 @@
 package cn.zbx1425.projectme;
 
+import cn.zbx1425.projectme.client.ProjectMeClient;
 import cn.zbx1425.projectme.compat.ICompatibility;
 import cn.zbx1425.projectme.compat.impl.MTRCompatibility;
 import cn.zbx1425.projectme.entity.EntityProjection;
