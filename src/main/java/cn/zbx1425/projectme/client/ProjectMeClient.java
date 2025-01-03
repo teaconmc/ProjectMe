@@ -10,9 +10,10 @@ import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.entity.player.AttackEntityEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -25,36 +26,38 @@ public class ProjectMeClient {
         eventBus.register(ModEventBusListener.class);
     }
 
-    private static UUID projectionEntityUUID;
-    private static long projectionEntityTime = -1;
-
-    private static GameProfile computeTargetProjectionEntityUUID() {
-        HitResult hit = Minecraft.getInstance().hitResult;
-        if (hit != null && hit.getType() == HitResult.Type.ENTITY && ((EntityHitResult) hit).getEntity() instanceof EntityProjection entity) {
-            return entity.gameProfile.getNow(Optional.empty()).orElse(null);
-        } else {
-            return null;
-        }
-    }
+    private static UUID peTargetUUID;
+    private static long peFirstInteractTime = -1;
 
     public static class ForgeEventBusListener {
 
         @SubscribeEvent
-        public static void clientTick(ClientTickEvent.Pre event) {
-            GameProfile projection = computeTargetProjectionEntityUUID();
-            if (projection == null) {
-                projectionEntityUUID = null;
-                projectionEntityTime = -1;
-            } else if (projectionEntityUUID != projection.getId()) {
-                projectionEntityUUID = projection.getId();
-                projectionEntityTime = System.currentTimeMillis();
+        public static void onPlayerInteractEntity(PlayerInteractEvent.EntityInteractSpecific event) {
+            if (!event.getEntity().level().isClientSide()) return;
+            if (event.getTarget() instanceof EntityProjection projection) {
+                if (System.currentTimeMillis() - peFirstInteractTime > 500) {
+                    peTargetUUID = null;
+                    peFirstInteractTime = -1;
+                }
+                if (!projection.getProjectingPlayer().equals(peTargetUUID)) {
+                    peTargetUUID = projection.getProjectingPlayer();
+                    peFirstInteractTime = System.currentTimeMillis();
+                    Minecraft.getInstance().getChatListener().handleSystemMessage(Component.translatable("project_me.projection_entity.goto"), true);
+                } else {
+                    if (System.currentTimeMillis() - peFirstInteractTime >= 10 &&
+                            System.currentTimeMillis() - peFirstInteractTime <= 500) {
+                        peTargetUUID = null;
+                        peFirstInteractTime = -1;
+                        Objects.requireNonNull(Minecraft.getInstance().getConnection()).sendCommand("/go " + projection.getName().getString());
+                    }
+                }
+            }
+        }
 
-                Minecraft.getInstance().getChatListener().handleSystemMessage(Component.translatable("project_me.projection_entity.goto"), true);
-            } else if (System.currentTimeMillis() - projectionEntityTime <= 500) {
-                projectionEntityUUID = null;
-                projectionEntityTime = -1;
-
-                Objects.requireNonNull(Minecraft.getInstance().getConnection()).sendCommand("/go " + projection.getName());
+        @SubscribeEvent
+        public static void onAttackEntity(AttackEntityEvent event) {
+            if (event.getTarget() instanceof EntityProjection) {
+                event.setCanceled(true);
             }
         }
     }

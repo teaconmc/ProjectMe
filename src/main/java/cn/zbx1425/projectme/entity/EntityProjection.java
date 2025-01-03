@@ -98,4 +98,8 @@ public class EntityProjection extends LivingEntity {
         return LivingEntity.createLivingAttributes()
                 .add(Attributes.KNOCKBACK_RESISTANCE, 1.0D);
     }
+
+    public UUID getProjectingPlayer() {
+        return entityData.get(PROJECTING_PLAYER);
+    }
 }
