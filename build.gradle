@@ -67,19 +67,95 @@ tasks.withType(JavaCompile).configureEach {
     it.options.release = 21
 }
 
-// Configure Maven publishing.
+
+
+
 publishing {
     publications {
-        mavenJava(MavenPublication) {
+        // Modified by TeaCon
+        register('release', MavenPublication) {
+            // noinspection GroovyAssignabilityCheck
             from components.java
+            version = rootProject.mod_version
+            groupId = rootProject.maven_group
+            artifactId = "$mod_github_repo-$rootProject.minecraft_version"
+            pom {
+                name = mod_github_repo
+                url = "https://github.com/$mod_github_owner/$mod_github_repo"
+                licenses {
+                    license {
+                        name = mod_license
+                        url = "https://github.com/$mod_github_owner/$mod_github_repo/blob/HEAD/LICENSE"
+                    }
+                }
+                organization {
+                    name = 'TeaConMC'
+                    url = 'https://github.com/teaconmc'
+                }
+                developers {
+                    for (mod_author in "$mod_authors".split(',')) {
+                        developer { id = mod_author.trim(); name = mod_author.trim() }
+                    }
+                }
+                issueManagement {
+                    system = 'GitHub Issues'
+                    url = "https://github.com/$mod_github_owner/$mod_github_repo/issues"
+                }
+                scm {
+                    url = "https://github.com/$mod_github_owner/$mod_github_repo"
+                    connection = "scm:git:git://github.com/$mod_github_owner/${mod_github_repo}.git"
+                    developerConnection = "scm:git:git@github.com:$mod_github_owner/${mod_github_repo}.git"
+                }
+            }
         }
     }
-
-    // See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
     repositories {
-        // Add repositories to publish to here.
-        // Notice: This block does NOT have the same function as the block in the top level.
-        // The repositories here will be used for publishing your artifact, not for
-        // retrieving dependencies.
+        // Modified by TeaCon
+        maven {
+            name "teacon"
+            url "s3://maven/"
+            credentials(AwsCredentials) {
+                accessKey = System.env.ARCHIVE_ACCESS_KEY
+                secretKey = System.env.ARCHIVE_SECRET_KEY
+            }
+        }
     }
+}
+
+// Added by TeaCon
+tasks.withType(PublishToMavenRepository).configureEach {
+    if (repository && repository.name == "archive") {
+        it.onlyIf {
+            System.env.MAVEN_USERNAME && System.env.MAVEN_PASSWORD
+        }
+    }
+}
+
+abstract class TeaConDumpPathToGitHub extends DefaultTask {
+    @Input
+    abstract Property<String> getPublishName()
+    @InputFile
+    abstract RegularFileProperty getTargetFile()
+    @TaskAction
+    void dump() {
+        if (System.env.GITHUB_ACTIONS) {
+            File theFile = targetFile.getAsFile().get()
+
+            def outputFile = new File(System.env.GITHUB_OUTPUT)
+            // Use the env-specific line separator for maximally possible compatibility
+            def newLine = System.getProperty('line.separator')
+
+            // Write out new env variable for later usage
+            outputFile << newLine << "artifact_name=${theFile.getName()}"
+            outputFile << newLine << "artifact_publish_name=${publishName.get()}"
+            outputFile << newLine << "artifact_path=${theFile.absolutePath}"
+        }
+    }
+}
+
+// Added by TeaCon
+tasks.register("githubActionOutput", TeaConDumpPathToGitHub) { task ->
+    task.onlyIf { System.env.GITHUB_ACTIONS }
+    task.getTargetFile().set(jar.archiveFile)
+    task.getPublishName().set("${jar.archiveBaseName.get()}-${version}.jar")
 }
