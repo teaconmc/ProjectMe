@@ -91,11 +91,11 @@ public class Synchronizer implements AutoCloseable {
         });
     }
 
-    public void notifyPlayerLeave(UUID player) {
-        RedisMessage.playerLeave(player).publishAsync(redisConn);
+    public void notifyPlayerAbsence(UUID player) {
+        RedisMessage.playerAbsence(player).publishAsync(redisConn);
     }
 
-    protected void handlePlayerLeave(UUID player) {
+    protected void handlePlayerAbsence(UUID player) {
         server.execute(() -> {
             EntityProjection currentEntity = currentProjections.get(player);
             if (currentEntity != null) {

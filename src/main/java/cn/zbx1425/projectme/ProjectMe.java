@@ -123,7 +123,7 @@ public class ProjectMe {
                     if (v1) {
                         synchronizer.notifyPlayerPresence(player);
                     } else if (v) {
-                        synchronizer.notifyPlayerLeave(player.getGameProfile().getId());
+                        synchronizer.notifyPlayerAbsence(player.getGameProfile().getId());
                     }
 
                     if (v != v1) {
@@ -138,7 +138,7 @@ public class ProjectMe {
         public static void onPlayerLeave(PlayerEvent.PlayerLoggedOutEvent event) {
             if (synchronizer == null) return;
             if (event.getEntity().getData(CONTEXT).visibility()) {
-                synchronizer.notifyPlayerLeave(event.getEntity().getGameProfile().getId());
+                synchronizer.notifyPlayerAbsence(event.getEntity().getGameProfile().getId());
             }
         }
     }

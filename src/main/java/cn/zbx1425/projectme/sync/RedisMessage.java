@@ -68,10 +68,10 @@ public class RedisMessage {
         return new RedisMessage(Action.PLAYER_PRESENCE, buffer, 0);
     }
 
-    public static RedisMessage playerLeave(UUID uuid) {
+    public static RedisMessage playerAbsence(UUID uuid) {
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         buffer.writeUUID(uuid);
-        return new RedisMessage(Action.PLAYER_LEAVE, buffer);
+        return new RedisMessage(Action.PLAYER_ABSENCE, buffer);
     }
 
     public void publishAsync(StatefulRedisConnection<String, ByteBuf> connection) {
@@ -99,10 +99,10 @@ public class RedisMessage {
                         yRotHead, yRotBody, xRot);
                 break;
             }
-            case PLAYER_LEAVE: {
+            case PLAYER_ABSENCE: {
                 FriendlyByteBuf buffer = new FriendlyByteBuf(content);
                 UUID player = buffer.readUUID();
-                synchronizer.handlePlayerLeave(player);
+                synchronizer.handlePlayerAbsence(player);
                 break;
             }
         }
@@ -113,6 +113,6 @@ public class RedisMessage {
     }
 
     public enum Action {
-        PLAYER_PRESENCE, PLAYER_LEAVE
+        PLAYER_PRESENCE, PLAYER_ABSENCE
     }
 }
