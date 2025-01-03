@@ -10,6 +10,7 @@ import io.lettuce.core.pubsub.RedisPubSubListener;
 import io.lettuce.core.pubsub.StatefulRedisPubSubConnection;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
@@ -78,6 +79,7 @@ public class Synchronizer implements AutoCloseable {
                 }
                 ServerLevel targetLevel = server.getLevel(level);
                 if (targetLevel == null) return;
+                if (!targetLevel.isLoaded(new BlockPos((int) position.x, (int) position.y, (int) position.z))) return;
                 CompoundTag entityInitData = new CompoundTag();
                 entityInitData.putString("id", ProjectMe.id("projection").toString());
                 entityInitData.putUUID("projectingPlayer", player);
