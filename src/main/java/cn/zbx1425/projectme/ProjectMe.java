@@ -1,7 +1,11 @@
 package cn.zbx1425.projectme;
 
+import cn.zbx1425.projectme.compat.ICompatibility;
+import cn.zbx1425.projectme.compat.impl.MTRCompatibility;
 import cn.zbx1425.projectme.entity.EntityProjection;
+import cn.zbx1425.projectme.entity.PlayerContext;
 import cn.zbx1425.projectme.sync.Synchronizer;
+import net.minecraft.Util;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.syncher.EntityDataSerializer;
@@ -9,23 +13,26 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
-import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.neoforge.attachment.AttachmentType;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.EntityAttributeCreationEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.registries.NeoForgeRegistries;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Random;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -44,18 +51,40 @@ public class ProjectMe {
     public static final Supplier<EntityDataSerializer<UUID>> UUID_ENTITY_DATA_SERIALIZER = ENTITY_DATA_SERIALIZERS.register("uuid",
             () -> EntityDataSerializer.forValueType(UUIDUtil.STREAM_CODEC));
 
+    private static final DeferredRegister<AttachmentType<?>> ATTACHMENT_TYPES = DeferredRegister.create(NeoForgeRegistries.ATTACHMENT_TYPES, MOD_ID);
+
+    private static final DeferredHolder<AttachmentType<?>, AttachmentType<PlayerContext>> CONTEXT = ATTACHMENT_TYPES.register(
+            "context", () -> AttachmentType.builder(() -> new PlayerContext(true)).serialize(PlayerContext.SERIALIZER).build()
+    );
+
     public static final ServerConfig CONFIG = new ServerConfig();
     public static Synchronizer synchronizer;
+
+    private static final List<ICompatibility> COMPATIBILITIES = Util.make(new ArrayList<>(), l -> {
+        if (ModList.get().isLoaded("mtr")) {
+            l.add(new MTRCompatibility());
+        }
+    });
 
     public ProjectMe(IEventBus eventBus) {
         ENTITY_TYPES.register(eventBus);
         ENTITY_DATA_SERIALIZERS.register(eventBus);
+        ATTACHMENT_TYPES.register(eventBus);
         NeoForge.EVENT_BUS.register(ForgeEventBusListener.class);
         eventBus.register(ModEventBusListener.class);
 
         if (FMLEnvironment.dist.isClient()) {
             new ProjectMeClient(eventBus);
         }
+    }
+
+    private static boolean computePlayerVisibility(ServerPlayer player) {
+        for (ICompatibility compatibility : COMPATIBILITIES) {
+            if (!compatibility.shouldDisplayPlayer(player)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public static class ForgeEventBusListener {
@@ -88,7 +117,17 @@ public class ProjectMe {
             if (synchronizer == null) return;
             if (event.getServer().getTickCount() % CONFIG.syncInterval.value == 0) {
                 for (ServerPlayer player : event.getServer().getPlayerList().getPlayers()) {
-                    synchronizer.notifyPlayerPresence(player);
+                    boolean v = player.getData(CONTEXT).visibility();
+                    boolean v1 = computePlayerVisibility(player);
+                    if (v1) {
+                        synchronizer.notifyPlayerPresence(player);
+                    } else if (v) {
+                        synchronizer.notifyPlayerLeave(player.getGameProfile().getId());
+                    }
+
+                    if (v != v1) {
+                        player.setData(CONTEXT, new PlayerContext(v1));
+                    }
                 }
                 // synchronizer.mockPlayerPresence(new Vec3(random.nextDouble(-5, 5), -60, random.nextDouble(-5, 5)));
             }
@@ -97,7 +136,9 @@ public class ProjectMe {
         @SubscribeEvent
         public static void onPlayerLeave(PlayerEvent.PlayerLoggedOutEvent event) {
             if (synchronizer == null) return;
-            synchronizer.notifyPlayerLeave(event.getEntity().getGameProfile().getId());
+            if (event.getEntity().getData(CONTEXT).visibility()) {
+                synchronizer.notifyPlayerLeave(event.getEntity().getGameProfile().getId());
+            }
         }
     }
 

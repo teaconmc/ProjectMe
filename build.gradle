@@ -16,6 +16,10 @@ repositories {
         name = 'NeoForged'
         url = 'https://maven.neoforged.net/releases'
     }
+    flatDir {
+        name = "libs"
+        dirs "$projectDir/libs"
+    }
 
     // Add repositories to retrieve artifacts from in here.
     // You should only use this when depending on other mods because
@@ -36,6 +40,8 @@ dependencies {
     implementation 'io.lettuce:lettuce-core:6.2.3.RELEASE'
     forgeRuntimeLibrary 'io.lettuce:lettuce-core:6.2.3.RELEASE'
     include 'io.lettuce:lettuce-core:6.2.3.RELEASE'
+
+    compileOnly ':mtr:'
 }
 
 processResources {
