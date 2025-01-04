@@ -24,9 +24,9 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public class EntityProjection extends LivingEntity {
+    private static final CompletableFuture<Optional<GameProfile>> EMPTY_GAME_PROFILE = CompletableFuture.completedFuture(Optional.empty());
 
-    @OnlyIn(Dist.CLIENT)
-    public CompletableFuture<Optional<GameProfile>> gameProfile = CompletableFuture.completedFuture(Optional.empty());
+    public CompletableFuture<Optional<GameProfile>> gameProfile = EMPTY_GAME_PROFILE;
 
     public EntityProjection(EntityType<? extends LivingEntity> entityType, Level level) {
         super(entityType, level);
