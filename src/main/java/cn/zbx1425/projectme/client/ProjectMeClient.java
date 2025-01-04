@@ -48,7 +48,7 @@ public class ProjectMeClient {
                             System.currentTimeMillis() - peFirstInteractTime <= 500) {
                         peTargetUUID = null;
                         peFirstInteractTime = -1;
-                        Objects.requireNonNull(Minecraft.getInstance().getConnection()).sendCommand("/go " + projection.getName().getString());
+                        Objects.requireNonNull(Minecraft.getInstance().getConnection()).sendCommand("go " + projection.getName().getString());
                     }
                 }
             }
