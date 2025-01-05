@@ -6,6 +6,7 @@ import net.minecraft.Util;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.HumanoidArm;
@@ -17,6 +18,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.SkullBlockEntity;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 import java.util.Optional;
@@ -61,7 +63,17 @@ public class EntityProjection extends LivingEntity {
     }
 
     @Override
+    public boolean canAttackType(EntityType<?> arg) {
+        return super.canAttackType(arg);
+    }
+
+    @Override
     public boolean isInvulnerable() {
+        return true;
+    }
+
+    @Override
+    public boolean isInvulnerableTo(DamageSource arg) {
         return true;
     }
 
@@ -71,17 +83,16 @@ public class EntityProjection extends LivingEntity {
     }
 
     @Override
-    public ItemStack getItemBySlot(EquipmentSlot arg) {
+    public @NotNull ItemStack getItemBySlot(@NotNull EquipmentSlot arg) {
         return ItemStack.EMPTY;
     }
 
     @Override
-    public void setItemSlot(EquipmentSlot arg, ItemStack arg2) {
-
+    public void setItemSlot(@NotNull EquipmentSlot arg, @NotNull ItemStack arg2) {
     }
 
     @Override
-    public HumanoidArm getMainArm() {
+    public @NotNull HumanoidArm getMainArm() {
         return HumanoidArm.RIGHT;
     }
 
@@ -89,7 +100,7 @@ public class EntityProjection extends LivingEntity {
             ProjectMe.UUID_ENTITY_DATA_SERIALIZER.get());
 
     @Override
-    protected void defineSynchedData(SynchedEntityData.Builder builder) {
+    protected void defineSynchedData(SynchedEntityData.@NotNull Builder builder) {
         super.defineSynchedData(builder);
         builder.define(PROJECTING_PLAYER, Util.NIL_UUID);
     }

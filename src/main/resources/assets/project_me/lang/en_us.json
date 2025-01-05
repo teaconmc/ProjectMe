@@ -1,4 +1,7 @@
 {
   "project_me.projection_entity.tooltip": "Player in another sub-server",
-  "project_me.projection_entity.goto": "Double right-click to go to their server, so that you can interact with him"
+  "project_me.projection_entity.goto": "Double right-click to go to their sub-server, and you can interact with them.",
+  "project_me.renderer.switch": "Projection Renderer has been disabled. Execute this command again to re-enable this feature.",
+  "project_me.renderer.disabled": "Projection Renderer has been disabled. Execute '/projectme renderer enable' to enable this feature.",
+  "project_me.renderer.enabled": "Projection Renderer has been enabled."
 }

@@ -17,6 +17,7 @@ import net.minecraft.world.item.ItemStack;
 import java.util.Optional;
 
 public class EntityProjectionRenderer extends LivingEntityRenderer<EntityProjection, PlayerModel<EntityProjection>> {
+    public static boolean enabled = true;
 
     private final PlayerModel<EntityProjection> slimModel;
     private final PlayerModel<EntityProjection> wideModel;
@@ -39,6 +40,10 @@ public class EntityProjectionRenderer extends LivingEntityRenderer<EntityProject
 
     @Override
     public void render(EntityProjection entity, float entityYaw, float partialTicks, PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
+        if (!enabled) {
+            return;
+        }
+
         Optional<GameProfile> result = entity.gameProfile.getNow(Optional.empty());
         if (result.isPresent()) {
             SkinManager skinManager = Minecraft.getInstance().getSkinManager();

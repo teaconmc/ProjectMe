@@ -1,4 +1,7 @@
 {
-  "project_me.projection_entity.tooltip": "位于另一个分服务器的玩家",
-  "project_me.projection_entity.goto": "双击右键前往他所在的服务器，以便与他交互"
+  "project_me.projection_entity.tooltip": "其他分服务器的玩家",
+  "project_me.projection_entity.goto": "双击右键前往对方所在的分服务器，以便与其交互",
+  "project_me.renderer.switch": "已不再渲染其他分服务器的玩家，再运行一次本命令以启用。",
+  "project_me.renderer.disabled": "已不再渲染其他分服务器的玩家，运行 /projectme renderer enable 来重新启用",
+  "project_me.renderer.enabled": "已启用渲染其他分服务器的玩家"
 }
