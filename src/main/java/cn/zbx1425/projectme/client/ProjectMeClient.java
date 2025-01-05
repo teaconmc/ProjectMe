@@ -60,14 +60,6 @@ public class ProjectMeClient {
                 event.setCanceled(true);
             }
         }
-    }
-
-    public static class ModEventBusListener {
-
-        @SubscribeEvent
-        public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
-            event.registerEntityRenderer(ProjectMe.ENTITY_PROJECTION.get(), EntityProjectionRenderer::new);
-        }
 
         @SubscribeEvent
         public static void registerCommands(RegisterClientCommandsEvent event) {
@@ -95,6 +87,14 @@ public class ProjectMeClient {
                             })
                     )
             ));
+        }
+    }
+
+    public static class ModEventBusListener {
+
+        @SubscribeEvent
+        public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
+            event.registerEntityRenderer(ProjectMe.ENTITY_PROJECTION.get(), EntityProjectionRenderer::new);
         }
     }
 }
