@@ -1,8 +1,9 @@
 {
-  "project_me.projection_entity.tooltip": "Player in another sub-server",
-  "project_me.projection_entity.tooltip_hint_1": "To interact with it, use '/go %s'",
-  "project_me.projection_entity.tooltip_hint_2": "To hide it, use '/pme'",
-  "project_me.projection_entity.goto": "To interact with it, go to their server - use '/go %s'",
+  "project_me.projection_entity.goto": "To got to their server, use '/go %s'    To hide it, use '/pme'",
   "project_me.projection.disabled": "Player Projection has been disabled. Execute '/pme' to enable this feature.",
-  "project_me.projection.enabled": "Player Projection has been enabled."
+  "project_me.projection.enabled": "Player Projection has been enabled.",
+
+  "config.jade.plugin_project_me.projection_entity_tooltip": "Player Projection",
+  "project_me.projection_entity.tooltip": "Player in another sub-server",
+  "project_me.projection_entity.tooltip_hint_1": "Hide: '/pme'"
 }
