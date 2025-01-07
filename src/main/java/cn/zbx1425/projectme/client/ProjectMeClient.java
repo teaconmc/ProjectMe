@@ -1,5 +1,6 @@
 package cn.zbx1425.projectme.client;
 
+import cn.zbx1425.projectme.ClientConfig;
 import cn.zbx1425.projectme.ProjectMe;
 import cn.zbx1425.projectme.entity.EntityProjection;
 import cn.zbx1425.projectme.entity.EntityProjectionRenderer;
@@ -25,10 +26,10 @@ public class ProjectMeClient {
         eventBus.register(ModEventBusListener.class);
     }
 
-    private static UUID peTargetUUID;
-    private static long peFirstInteractTime = -1;
-
     public static class ForgeEventBusListener {
+
+        private static UUID peTargetUUID;
+        private static long peFirstInteractTime = -1;
 
         @SubscribeEvent
         public static void onPlayerInteractEntity(PlayerInteractEvent.EntityInteractSpecific event) {
@@ -63,30 +64,30 @@ public class ProjectMeClient {
 
         @SubscribeEvent
         public static void registerCommands(RegisterClientCommandsEvent event) {
-            event.getDispatcher().register(Commands.literal("projectme").then(
-                    Commands.literal("render").then(
-                            Commands.literal("switch").executes(c -> {
-                                EntityProjectionRenderer.enabled = !EntityProjectionRenderer.enabled;
-
-                                c.getSource().sendSuccess(() -> Component.translatable("project_me.renderer.switch"), true);
-                                return Command.SINGLE_SUCCESS;
-                            })
-                    ).then(
+            event.getDispatcher().register(Commands.literal("pme").then(
+                    Commands.literal("projection").then(
                             Commands.literal("enable").executes(c -> {
-                                EntityProjectionRenderer.enabled = true;
+                                ClientConfig.isProjectionEntityEnabled = true;
 
-                                c.getSource().sendSuccess(() -> Component.translatable("project_me.renderer.enabled"), true);
+                                c.getSource().sendSuccess(() -> Component.translatable("project_me.projection.enabled"), true);
                                 return Command.SINGLE_SUCCESS;
                             })
                     ).then(
                             Commands.literal("disable").executes(c -> {
-                                EntityProjectionRenderer.enabled = false;
+                                ClientConfig.isProjectionEntityEnabled = false;
 
-                                c.getSource().sendSuccess(() -> Component.translatable("project_me.renderer.disabled"), true);
+                                c.getSource().sendSuccess(() -> Component.translatable("project_me.projection.disabled"), true);
                                 return Command.SINGLE_SUCCESS;
                             })
                     )
-            ));
+            ).executes(c -> {
+                ClientConfig.isProjectionEntityEnabled = !ClientConfig.isProjectionEntityEnabled;
+
+                c.getSource().sendSuccess(() -> ClientConfig.isProjectionEntityEnabled
+                        ? Component.translatable("project_me.projection.enabled")
+                        : Component.translatable("project_me.projection.disabled"), true);
+                return Command.SINGLE_SUCCESS;
+            }));
         }
     }
 

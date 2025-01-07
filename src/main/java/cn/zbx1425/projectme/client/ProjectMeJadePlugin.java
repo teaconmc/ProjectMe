@@ -1,5 +1,6 @@
 package cn.zbx1425.projectme.client;
 
+import cn.zbx1425.projectme.ClientConfig;
 import cn.zbx1425.projectme.ProjectMe;
 import cn.zbx1425.projectme.entity.EntityProjection;
 import net.minecraft.network.chat.Component;
@@ -16,6 +17,7 @@ public class ProjectMeJadePlugin implements IWailaPlugin {
         registration.registerEntityComponent(new IComponentProvider<>() {
             @Override
             public void appendTooltip(ITooltip tooltip, EntityAccessor entity, IPluginConfig iPluginConfig) {
+                if (!ClientConfig.isProjectionEntityEnabled) return;
                 tooltip.add(Component.translatable("project_me.projection_entity.tooltip"));
             }
 

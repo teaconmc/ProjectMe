@@ -1,5 +1,6 @@
 package cn.zbx1425.projectme.entity;
 
+import cn.zbx1425.projectme.ClientConfig;
 import cn.zbx1425.projectme.ProjectMe;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.Util;
@@ -75,6 +76,11 @@ public class EntityProjection extends LivingEntity {
     @Override
     public boolean isInvulnerableTo(DamageSource arg) {
         return true;
+    }
+
+    @Override
+    public boolean isPickable() {
+        return ClientConfig.isProjectionEntityEnabled && super.isPickable();
     }
 
     @Override
