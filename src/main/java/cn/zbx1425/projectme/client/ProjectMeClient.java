@@ -5,6 +5,7 @@ import cn.zbx1425.projectme.ProjectMe;
 import cn.zbx1425.projectme.entity.EntityProjection;
 import cn.zbx1425.projectme.entity.EntityProjectionRenderer;
 import com.mojang.brigadier.Command;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
@@ -28,36 +29,22 @@ public class ProjectMeClient {
 
     public static class ForgeEventBusListener {
 
-        private static UUID peTargetUUID;
-        private static long peFirstInteractTime = -1;
-
         @SubscribeEvent
         public static void onPlayerInteractEntity(PlayerInteractEvent.EntityInteractSpecific event) {
             if (!event.getEntity().level().isClientSide()) return;
             if (event.getTarget() instanceof EntityProjection projection) {
-                if (System.currentTimeMillis() - peFirstInteractTime > 500) {
-                    peTargetUUID = null;
-                    peFirstInteractTime = -1;
-                }
-                if (!projection.getProjectingPlayer().equals(peTargetUUID)) {
-                    peTargetUUID = projection.getProjectingPlayer();
-                    peFirstInteractTime = System.currentTimeMillis();
-                    Minecraft.getInstance().getChatListener().handleSystemMessage(Component.translatable("project_me.projection_entity.goto"), true);
-                } else {
-                    if (System.currentTimeMillis() - peFirstInteractTime >= 10 &&
-                            System.currentTimeMillis() - peFirstInteractTime <= 500) {
-                        peTargetUUID = null;
-                        peFirstInteractTime = -1;
-                        Objects.requireNonNull(Minecraft.getInstance().getConnection()).sendCommand("go " + projection.getName().getString());
-                    }
-                }
+                Minecraft.getInstance().getChatListener().handleSystemMessage(
+                        Component.translatable("project_me.projection_entity.goto", projection.getName())
+                                .withStyle(ChatFormatting.RED).withStyle(ChatFormatting.BOLD), true);
             }
         }
 
         @SubscribeEvent
         public static void onAttackEntity(AttackEntityEvent event) {
-            if (event.getTarget() instanceof EntityProjection) {
-                Minecraft.getInstance().getChatListener().handleSystemMessage(Component.translatable("project_me.projection_entity.goto"), true);
+            if (event.getTarget() instanceof EntityProjection projection) {
+                Minecraft.getInstance().getChatListener().handleSystemMessage(
+                        Component.translatable("project_me.projection_entity.goto", projection.getName())
+                                .withStyle(ChatFormatting.RED).withStyle(ChatFormatting.BOLD), true);
                 event.setCanceled(true);
             }
         }

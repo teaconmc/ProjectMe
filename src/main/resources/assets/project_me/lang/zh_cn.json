@@ -1,6 +1,8 @@
 {
-  "project_me.projection_entity.tooltip": "其他分服务器的玩家",
-  "project_me.projection_entity.goto": "双击右键前往对方所在的分服务器，以便与其交互",
+  "project_me.projection_entity.tooltip": "位于其他分服务器的玩家",
+  "project_me.projection_entity.tooltip_hint_1": "要与它交互，请使用指令: /go %s",
+  "project_me.projection_entity.tooltip_hint_2": "要不显示它，请使用指令: /pme",
+  "project_me.projection_entity.goto": "前往对方所在的分服务器才可与其交互——请使用指令: /go %s",
   "project_me.projection.disabled": "已不再显示其他分服务器的玩家，运行 /pme 来重新启用",
   "project_me.projection.enabled": "已启用显示其他分服务器的玩家"
 }
