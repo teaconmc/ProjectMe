@@ -22,8 +22,7 @@ public class ProjectMeJadePlugin implements IWailaPlugin {
                 if (!ClientConfig.isProjectionEntityEnabled) return;
                 tooltip.add(Component.translatable("project_me.projection_entity.tooltip")
                         .withStyle(ChatFormatting.GOLD).withStyle(ChatFormatting.BOLD));
-                tooltip.add(Component.translatable("project_me.projection_entity.tooltip_hint_1", projection.getName()));
-                tooltip.add(Component.translatable("project_me.projection_entity.tooltip_hint_2"));
+                tooltip.add(Component.translatable("project_me.projection_entity.tooltip_hint_1"));
             }
 
             @Override
