@@ -36,8 +36,6 @@ public class Synchronizer implements AutoCloseable {
 
     private final Map<UUID, EntityProjection> currentProjections = new HashMap<>();
 
-    public static final String HMAP_ALL_KEY = "SSHARD_DATA_ALL";
-
     public Synchronizer(String URI, MinecraftServer server) {
         redisClient = RedisClient.create(URI);
         redisConn = redisClient.connect(ByteBufCodec.INSTANCE);
@@ -47,13 +45,23 @@ public class Synchronizer implements AutoCloseable {
         this.server = server;
     }
 
-    public void notifyPlayerPresence(List<ServerPlayer> player) {
-        RedisMessage playerPresence = RedisMessage.beginPlayerPresence(player.size());
-        for (ServerPlayer p : player) {
+    public void notifyPlayerPresence(List<ServerPlayer> players) {
+        RedisMessage playerPresence = RedisMessage.beginPlayerPresence(players.size());
+        for (ServerPlayer p : players) {
             boolean v1 = ProjectMe.computePlayerVisibility(p);
             playerPresence.andWithPlayer(p, v1);
         }
         playerPresence.publishAsync(redisConn);
+
+        server.execute(() -> {
+            for (ServerPlayer p : players) {
+                EntityProjection currentEntity = currentProjections.get(p.getGameProfile().getId());
+                if (currentEntity != null) {
+                    currentEntity.discard();
+                    currentProjections.remove(p.getGameProfile().getId());
+                }
+            }
+        });
     }
 
     public void mockPlayerPresence(Vec3 position) {
