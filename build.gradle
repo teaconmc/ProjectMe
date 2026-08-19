@@ -1,5 +1,5 @@
 plugins {
-    id 'dev.architectury.loom' version '1.7-SNAPSHOT'
+    id 'dev.architectury.loom-no-remap' version '1.17-SNAPSHOT'
     id 'maven-publish'
 }
 
@@ -28,13 +28,8 @@ repositories {
     // for more information about repositories.
 }
 
-loom {
-    silentMojangMappingsLicense()
-}
-
 dependencies {
     minecraft "net.minecraft:minecraft:$project.minecraft_version"
-    mappings loom.officialMojangMappings()
     neoForge "net.neoforged:neoforge:$project.neoforge_version"
 
     implementation 'io.lettuce:lettuce-core:6.2.3.RELEASE'
@@ -59,12 +54,12 @@ java {
     // If you remove this line, sources will not be generated.
     withSourcesJar()
 
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
 }
 
 tasks.withType(JavaCompile).configureEach {
-    it.options.release = 21
+    it.options.release = 25
 }
 
 
