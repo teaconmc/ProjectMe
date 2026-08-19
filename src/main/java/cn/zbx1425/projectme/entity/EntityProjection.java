@@ -3,10 +3,11 @@ package cn.zbx1425.projectme.entity;
 import cn.zbx1425.projectme.ClientConfig;
 import cn.zbx1425.projectme.ProjectMe;
 import com.mojang.authlib.GameProfile;
-import net.minecraft.Util;
-import net.minecraft.nbt.CompoundTag;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Util;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -16,10 +17,11 @@ import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.ResolvableProfile;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.SkullBlockEntity;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
@@ -28,9 +30,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public class EntityProjection extends LivingEntity {
-    private static final CompletableFuture<Optional<GameProfile>> EMPTY_GAME_PROFILE = CompletableFuture.completedFuture(Optional.empty());
-
-    public CompletableFuture<Optional<GameProfile>> gameProfile = EMPTY_GAME_PROFILE;
+    public ResolvableProfile gameProfile = ResolvableProfile.createUnresolved(Util.NIL_UUID);
 
     public EntityProjection(EntityType<? extends LivingEntity> entityType, Level level) {
         super(entityType, level);
@@ -38,23 +38,23 @@ public class EntityProjection extends LivingEntity {
     }
 
     @Override
-    public void addAdditionalSaveData(CompoundTag tag) {
+    public void addAdditionalSaveData(ValueOutput tag) {
         super.addAdditionalSaveData(tag);
-        tag.putUUID("projectingPlayer", entityData.get(PROJECTING_PLAYER));
+        tag.store("projectingPlayer", UUIDUtil.CODEC, entityData.get(PROJECTING_PLAYER));
     }
 
     @Override
-    public void readAdditionalSaveData(CompoundTag tag) {
+    public void readAdditionalSaveData(ValueInput tag) {
         super.readAdditionalSaveData(tag);
-        entityData.set(PROJECTING_PLAYER, tag.getUUID("projectingPlayer"));
+        tag.read("projectingPlayer", UUIDUtil.CODEC).ifPresent(uuid -> entityData.set(PROJECTING_PLAYER, uuid));
     }
 
     @Override
     public void onSyncedDataUpdated(EntityDataAccessor<?> key) {
         super.onSyncedDataUpdated(key);
         if (PROJECTING_PLAYER.equals(key)) {
-            if (level().isClientSide) {
-                gameProfile = SkullBlockEntity.fetchGameProfile(entityData.get(PROJECTING_PLAYER));
+            if (level().isClientSide()) {
+                gameProfile = ResolvableProfile.createUnresolved(entityData.get(PROJECTING_PLAYER));
             }
         }
     }
@@ -65,17 +65,12 @@ public class EntityProjection extends LivingEntity {
     }
 
     @Override
-    public boolean canAttackType(EntityType<?> arg) {
-        return super.canAttackType(arg);
-    }
-
-    @Override
     public boolean isInvulnerable() {
         return true;
     }
 
     @Override
-    public boolean isInvulnerableTo(DamageSource arg) {
+    public boolean isInvulnerableTo(ServerLevel level, DamageSource source) {
         return true;
     }
 
@@ -92,11 +87,6 @@ public class EntityProjection extends LivingEntity {
     @Override
     public boolean isInvisibleTo(Player arg) {
         return !ClientConfig.isProjectionEntityEnabled;
-    }
-
-    @Override
-    public Iterable<ItemStack> getArmorSlots() {
-        return List.of();
     }
 
     @Override

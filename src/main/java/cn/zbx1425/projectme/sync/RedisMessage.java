@@ -49,12 +49,12 @@ public class RedisMessage {
     }
 
     public RedisMessage andWithPlayer(ServerPlayer player, boolean isVisible) {
-        content.writeUUID(player.getGameProfile().getId());
+        content.writeUUID(player.getGameProfile().id());
         content.writeBoolean(isVisible);
         if (isVisible) {
             content.writeUtf(player.getDisplayName().getString());
             content.writeResourceKey(player.level().dimension());
-            content.writeVec3(player.position());
+            Vec3.STREAM_CODEC.encode(content, player.position());
             content.writeFloat(player.getYHeadRot());
             content.writeFloat(player.getYRot());
             content.writeFloat(player.getXRot());
@@ -69,7 +69,7 @@ public class RedisMessage {
         result.content.writeBoolean(true);
         result.content.writeUtf("MalayP");
         result.content.writeResourceKey(Level.OVERWORLD);
-        result.content.writeVec3(position);
+        Vec3.STREAM_CODEC.encode(result.content, position);
         result.content.writeFloat(0);
         result.content.writeFloat(0);
         result.content.writeFloat(0);
@@ -97,7 +97,7 @@ public class RedisMessage {
                     if (isVisible) {
                         String playerName = content.readUtf();
                         ResourceKey<Level> level = content.readResourceKey(Registries.DIMENSION);
-                        Vec3 position = content.readVec3();
+                        Vec3 position = Vec3.STREAM_CODEC.decode(content);
                         float yRotHead = content.readFloat();
                         float yRotBody = content.readFloat();
                         float xRot = content.readFloat();

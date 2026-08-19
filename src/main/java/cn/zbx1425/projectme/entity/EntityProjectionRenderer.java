@@ -1,61 +1,66 @@
 package cn.zbx1425.projectme.entity;
 
 import cn.zbx1425.projectme.ClientConfig;
-import com.mojang.authlib.GameProfile;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.HumanoidModel;
-import net.minecraft.client.model.PlayerModel;
 import net.minecraft.client.model.geom.ModelLayers;
-import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.model.player.PlayerModel;
+import net.minecraft.client.renderer.PlayerSkinRenderCache;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
+import net.minecraft.client.renderer.entity.HumanoidMobRenderer;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
-import net.minecraft.client.resources.PlayerSkin;
-import net.minecraft.client.resources.SkinManager;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.client.renderer.entity.state.AvatarRenderState;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.player.PlayerModelType;
+import net.minecraft.world.entity.player.PlayerSkin;
 import net.minecraft.world.item.ItemStack;
+import org.jspecify.annotations.NonNull;
 
-import java.util.Optional;
+public class EntityProjectionRenderer extends LivingEntityRenderer<EntityProjection, AvatarRenderState, PlayerModel> {
 
-public class EntityProjectionRenderer extends LivingEntityRenderer<EntityProjection, PlayerModel<EntityProjection>> {
+    private final PlayerModel slimModel;
+    private final PlayerModel wideModel;
 
-    private final PlayerModel<EntityProjection> slimModel;
-    private final PlayerModel<EntityProjection> wideModel;
+    private final PlayerSkinRenderCache playerSkinRenderCache;
 
     public EntityProjectionRenderer(EntityRendererProvider.Context context) {
-        super(context, new PlayerModel<>(context.bakeLayer(ModelLayers.PLAYER_SLIM), true), 0.5f);
+        super(context, new PlayerModel(context.bakeLayer(ModelLayers.PLAYER_SLIM), true), 0.5f);
         slimModel = model;
-        wideModel = new PlayerModel<>(context.bakeLayer(ModelLayers.PLAYER), false);
+        wideModel = new PlayerModel(context.bakeLayer(ModelLayers.PLAYER), false);
+        this.playerSkinRenderCache = context.getPlayerSkinRenderCache();
     }
 
     @Override
-    public ResourceLocation getTextureLocation(EntityProjection entity) {
-        Optional<GameProfile> result = entity.gameProfile.getNow(Optional.empty());
-        if (result.isPresent()) {
-            SkinManager skinManager = Minecraft.getInstance().getSkinManager();
-            return skinManager.getInsecureSkin(result.get()).texture();
-        }
-        return ResourceLocation.withDefaultNamespace("textures/entity/player/slim/alex.png");
+    public @NonNull Identifier getTextureLocation(AvatarRenderState state) {
+        return state.skin.body().texturePath();
     }
 
     @Override
-    public void render(EntityProjection entity, float entityYaw, float partialTicks, PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
-        if (!ClientConfig.isProjectionEntityEnabled) {
-            return;
-        }
+    public void submit(@NonNull AvatarRenderState state, @NonNull PoseStack poseStack, @NonNull SubmitNodeCollector submitNodeCollector, @NonNull CameraRenderState camera) {
+        if (!ClientConfig.isProjectionEntityEnabled) return;
 
-        Optional<GameProfile> result = entity.gameProfile.getNow(Optional.empty());
-        if (result.isPresent()) {
-            SkinManager skinManager = Minecraft.getInstance().getSkinManager();
-            model = skinManager.getInsecureSkin(result.get()).model() == PlayerSkin.Model.SLIM ? slimModel : wideModel;
-        } else {
-            model = slimModel;
-        }
+        model = state.skin.model() == PlayerModelType.SLIM ? slimModel : wideModel;
+        super.submit(state, poseStack, submitNodeCollector, camera);
+    }
 
-        PlayerModel<EntityProjection> playerModel = this.getModel();
-        playerModel.setAllVisible(true);
+    @Override
+    public @NonNull AvatarRenderState createRenderState() {
+        return new AvatarRenderState();
+    }
+
+    @Override
+    public void extractRenderState(@NonNull EntityProjection entity, @NonNull AvatarRenderState state, float partialTicks) {
+        super.extractRenderState(entity, state, partialTicks);
+        HumanoidMobRenderer.extractHumanoidRenderState(entity, state, partialTicks, this.itemModelResolver);
+        state.skin = resolveClientSkin(entity);
         ItemStack handStack = entity.getMainHandItem();
-        playerModel.rightArmPose = !handStack.isEmpty() ? HumanoidModel.ArmPose.ITEM : HumanoidModel.ArmPose.EMPTY;
-        super.render(entity, entityYaw, partialTicks, poseStack, buffer, packedLight);
+        state.rightArmPose = !handStack.isEmpty() ? HumanoidModel.ArmPose.ITEM : HumanoidModel.ArmPose.EMPTY;
+        state.id = entity.getId();
+    }
+
+    public PlayerSkin resolveClientSkin(EntityProjection entity) {
+        return playerSkinRenderCache.getOrDefault(entity.gameProfile).playerSkin();
     }
 }

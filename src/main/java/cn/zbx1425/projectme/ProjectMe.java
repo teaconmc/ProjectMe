@@ -6,12 +6,14 @@ import cn.zbx1425.projectme.compat.impl.MTRCompatibility;
 import cn.zbx1425.projectme.compat.impl.VanillaCompatibility;
 import cn.zbx1425.projectme.entity.EntityProjection;
 import cn.zbx1425.projectme.sync.Synchronizer;
-import net.minecraft.Util;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.syncher.EntityDataSerializer;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Util;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.neoforged.bus.api.IEventBus;
@@ -46,7 +48,8 @@ public class ProjectMe {
     public static final DeferredRegister<EntityDataSerializer<?>> ENTITY_DATA_SERIALIZERS = DeferredRegister.create(NeoForgeRegistries.ENTITY_DATA_SERIALIZERS, MOD_ID);
 
     public static final Supplier<EntityType<EntityProjection>> ENTITY_PROJECTION = ENTITY_TYPES.register("projection",
-            () -> EntityType.Builder.of(EntityProjection::new, MobCategory.CREATURE).sized(0.6f, 1.8f).build("projection"));
+            () -> EntityType.Builder.of(EntityProjection::new, MobCategory.CREATURE).sized(0.6f, 1.8f)
+                .build(ResourceKey.create(Registries.ENTITY_TYPE, id("projection"))));
 
     public static final Supplier<EntityDataSerializer<UUID>> UUID_ENTITY_DATA_SERIALIZER = ENTITY_DATA_SERIALIZERS.register("uuid",
             () -> EntityDataSerializer.forValueType(UUIDUtil.STREAM_CODEC));
@@ -70,7 +73,7 @@ public class ProjectMe {
         NeoForge.EVENT_BUS.register(ForgeEventBusListener.class);
         eventBus.register(ModEventBusListener.class);
 
-        if (FMLEnvironment.dist.isClient()) {
+        if (FMLEnvironment.getDist().isClient()) {
             new ProjectMeClient(eventBus);
         }
     }
@@ -121,7 +124,7 @@ public class ProjectMe {
         @SubscribeEvent
         public static void onPlayerLeave(PlayerEvent.PlayerLoggedOutEvent event) {
             if (synchronizer == null) return;
-            synchronizer.notifyPlayerAbsence(event.getEntity().getGameProfile().getId());
+            synchronizer.notifyPlayerAbsence(event.getEntity().getGameProfile().id());
         }
     }
 
@@ -133,7 +136,7 @@ public class ProjectMe {
         }
     }
 
-    public static ResourceLocation id(String path) {
-        return ResourceLocation.fromNamespaceAndPath(MOD_ID, path);
+    public static Identifier id(String path) {
+        return Identifier.fromNamespaceAndPath(MOD_ID, path);
     }
 }

@@ -11,11 +11,13 @@ import io.lettuce.core.pubsub.StatefulRedisPubSubConnection;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
@@ -55,10 +57,10 @@ public class Synchronizer implements AutoCloseable {
 
         server.execute(() -> {
             for (ServerPlayer p : players) {
-                EntityProjection currentEntity = currentProjections.get(p.getGameProfile().getId());
+                EntityProjection currentEntity = currentProjections.get(p.getGameProfile().id());
                 if (currentEntity != null) {
                     currentEntity.discard();
-                    currentProjections.remove(p.getGameProfile().getId());
+                    currentProjections.remove(p.getGameProfile().id());
                 }
             }
         });
@@ -90,18 +92,18 @@ public class Synchronizer implements AutoCloseable {
                 if (!targetLevel.isLoaded(new BlockPos((int) position.x, (int) position.y, (int) position.z))) return;
                 CompoundTag entityInitData = new CompoundTag();
                 entityInitData.putString("id", ProjectMe.id("projection").toString());
-                entityInitData.putUUID("projectingPlayer", player);
+                entityInitData.store("projectingPlayer", UUIDUtil.CODEC, player);
                 entityInitData.putBoolean("NoGravity", true);
                 entityInitData.putString("CustomName", playerName);
-                EntityProjection entity = (EntityProjection) EntityType.loadEntityRecursive(entityInitData, targetLevel, newEntity -> {
-                    newEntity.moveTo(position, yRotBody, xRot);
+                EntityProjection entity = (EntityProjection) EntityType.loadEntityRecursive(entityInitData, targetLevel, EntitySpawnReason.COMMAND, newEntity -> {
+                    newEntity.moveOrInterpolateTo(position, yRotBody, xRot);
                     return newEntity;
                 });
                 if (entity == null) return;
                 if (!targetLevel.tryAddFreshEntityWithPassengers(entity)) return;
                 currentProjections.put(player, entity);
             } else {
-                currentEntity.moveTo(position, yRotBody, xRot);
+                currentEntity.moveOrInterpolateTo(position, yRotBody, xRot);
                 currentEntity.setYHeadRot(yRotHead);
             }
         });

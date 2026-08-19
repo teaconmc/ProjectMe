@@ -5,13 +5,13 @@ import cn.zbx1425.projectme.ProjectMe;
 import cn.zbx1425.projectme.entity.EntityProjection;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import snownee.jade.api.*;
 import snownee.jade.api.config.IPluginConfig;
 
 @WailaPlugin(ProjectMe.MOD_ID)
 public class ProjectMeJadePlugin implements IWailaPlugin {
-    private static final ResourceLocation PROJECTION = ProjectMe.id("projection_entity_tooltip");
+    private static final Identifier PROJECTION = ProjectMe.id("projection_entity_tooltip");
 
     @Override
     public void registerClient(IWailaClientRegistration registration) {
@@ -26,7 +26,7 @@ public class ProjectMeJadePlugin implements IWailaPlugin {
             }
 
             @Override
-            public ResourceLocation getUid() {
+            public Identifier getUid() {
                 return PROJECTION;
             }
         }, EntityProjection.class);
