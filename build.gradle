@@ -35,6 +35,8 @@ dependencies {
     implementation 'io.lettuce:lettuce-core:6.2.3.RELEASE'
     forgeRuntimeLibrary 'io.lettuce:lettuce-core:6.2.3.RELEASE'
     include 'io.lettuce:lettuce-core:6.2.3.RELEASE'
+    include "io.projectreactor:reactor-core:3.4.27"
+    include "org.reactivestreams:reactive-streams:1.0.4"
 
     compileOnly ':mtr:'
     compileOnly ':jade:'
