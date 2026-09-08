@@ -88,7 +88,7 @@ public class Synchronizer implements AutoCloseable {
                     || !currentEntity.level().dimension().equals(level)) {
                 if (currentEntity != null) {
                     if (currentEntity.level().getEntity(currentEntity.getId()) == null && !currentEntity.isRemoved()) {
-                        ProjectMe.LOGGER.debug("EntityProjection not in level while not removed, for {}", player);
+                        ProjectMe.LOGGER.warn("EntityProjection not in level while not removed, player: {}", player);
                     }
                     currentEntity.discard();
                     currentProjections.remove(player);
@@ -112,7 +112,7 @@ public class Synchronizer implements AutoCloseable {
                 });
                 if (entity == null) return;
                 if (!targetLevel.addFreshEntity(entity)) {
-                    ProjectMe.LOGGER.debug("Cannot add entity, for {}", player);
+                    ProjectMe.LOGGER.warn("Cannot add entity, player: {}", player);
                     return;
                 }
                 currentProjections.put(player, entity);
