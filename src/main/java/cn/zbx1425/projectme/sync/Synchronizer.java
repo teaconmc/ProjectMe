@@ -66,8 +66,10 @@ public class Synchronizer implements AutoCloseable {
         });
     }
 
-    public void mockPlayerPresence(Vec3 position) {
-        RedisMessage.mockPlayerPresence(position).publishAsync(redisConn);
+    public void mockPlayerPresence() {
+        for (RedisMessage message : RedisMessage.mockPlayerPresence()) {
+            message.publishAsync(redisConn);
+        }
     }
 
     protected void handlePlayerPresence(UUID player, String playerName, ResourceKey<Level> level, Vec3 position,
@@ -82,8 +84,12 @@ public class Synchronizer implements AutoCloseable {
                 return;
             }
             if (currentEntity == null || currentEntity.isRemoved()
+                    || currentEntity.level().getEntity(currentEntity.getId()) == null
                     || !currentEntity.level().dimension().equals(level)) {
                 if (currentEntity != null) {
+                    if (currentEntity.level().getEntity(currentEntity.getId()) == null && !currentEntity.isRemoved()) {
+                        ProjectMe.LOGGER.debug("EntityProjection not in level while not removed, for {}", player);
+                    }
                     currentEntity.discard();
                     currentProjections.remove(player);
                 }
@@ -93,18 +99,24 @@ public class Synchronizer implements AutoCloseable {
                 CompoundTag entityInitData = new CompoundTag();
                 entityInitData.putString("id", ProjectMe.id("projection").toString());
                 entityInitData.store("projectingPlayer", UUIDUtil.CODEC, player);
+                entityInitData.putLong("addedAt", System.currentTimeMillis());
                 entityInitData.putBoolean("NoGravity", true);
                 entityInitData.putString("CustomName", playerName);
-                EntityProjection entity = (EntityProjection) EntityType.loadEntityRecursive(entityInitData, targetLevel, EntitySpawnReason.COMMAND, newEntity -> {
-                    newEntity.moveOrInterpolateTo(position, yRotBody, xRot);
+                EntityProjection entity = (EntityProjection) EntityType.loadEntityRecursive(entityInitData, targetLevel, EntitySpawnReason.DIMENSION_TRAVEL, newEntity -> {
+                    newEntity.setPos(position);
+                    newEntity.setYRot(yRotHead);
+                    newEntity.setXRot(xRot);
+                    newEntity.setYHeadRot(yRotHead);
+                    newEntity.setYBodyRot(yRotBody);
                     return newEntity;
                 });
                 if (entity == null) return;
                 if (!targetLevel.tryAddFreshEntityWithPassengers(entity)) return;
                 currentProjections.put(player, entity);
             } else {
-                currentEntity.moveOrInterpolateTo(position, yRotBody, xRot);
+                currentEntity.moveOrInterpolateTo(position, yRotHead, xRot);
                 currentEntity.setYHeadRot(yRotHead);
+                currentEntity.setYBodyRot(yRotBody);
             }
         });
     }

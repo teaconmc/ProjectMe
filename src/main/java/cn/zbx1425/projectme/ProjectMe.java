@@ -16,6 +16,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Util;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModList;
@@ -35,7 +36,9 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Supplier;
 
 @Mod(ProjectMe.MOD_ID)
@@ -117,7 +120,7 @@ public class ProjectMe {
             if (synchronizer == null) return;
             if (event.getServer().getTickCount() % CONFIG.syncInterval.value == 0) {
                 synchronizer.notifyPlayerPresence(event.getServer().getPlayerList().getPlayers());
-                // synchronizer.mockPlayerPresence(new Vec3(random.nextDouble(-5, 5), -60, random.nextDouble(-5, 5)));
+//                synchronizer.mockPlayerPresence();
             }
         }
 

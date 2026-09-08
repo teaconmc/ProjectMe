@@ -11,8 +11,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
 import java.io.IOException;
-import java.util.Random;
-import java.util.UUID;
+import java.util.*;
 
 public class RedisMessage {
 
@@ -62,17 +61,36 @@ public class RedisMessage {
         return this;
     }
 
-    private static final UUID MOCK_PLAYER_UUID = UUID.fromString("8f50bdf3-cb09-4e29-ab76-dc1cf9db86a1");
-    public static RedisMessage mockPlayerPresence(Vec3 position) {
-        RedisMessage result = beginPlayerPresence(1);
-        result.content.writeUUID(MOCK_PLAYER_UUID);
-        result.content.writeBoolean(true);
-        result.content.writeUtf("MalayP");
-        result.content.writeResourceKey(Level.OVERWORLD);
-        Vec3.STREAM_CODEC.encode(result.content, position);
-        result.content.writeFloat(0);
-        result.content.writeFloat(0);
-        result.content.writeFloat(0);
+    private static final ArrayDeque<UUID> mockPlayers = new ArrayDeque<>();
+    private static final Random random = new Random();
+
+    public static List<RedisMessage> mockPlayerPresence() {
+        List<RedisMessage> result = new ArrayList<>();
+        if (random.nextInt(100) < 1) {
+            if (random.nextBoolean() || mockPlayers.size() >= 20) {
+                if (!mockPlayers.isEmpty()) {
+                    UUID playerLeft = mockPlayers.pop();
+                    RedisMessage absencePacket = playerAbsence(playerLeft);
+                    absencePacket.resetInitiator(0);
+                    result.add(absencePacket);
+                }
+            } else {
+                mockPlayers.add(UUID.randomUUID());
+            }
+        }
+        RedisMessage presencePacket = beginPlayerPresence(mockPlayers.size());
+        for (UUID player : mockPlayers) {
+            presencePacket.content.writeUUID(player);
+            presencePacket.content.writeBoolean(true);
+            presencePacket.content.writeUtf(player.toString().substring(0, 8));
+            presencePacket.content.writeResourceKey(Level.OVERWORLD);
+            Vec3.STREAM_CODEC.encode(presencePacket.content, new Vec3(random.nextDouble(-10, 10), -60, random.nextDouble(-10, 10)));
+            presencePacket.content.writeFloat(0);
+            presencePacket.content.writeFloat(0);
+            presencePacket.content.writeFloat(0);
+        }
+        presencePacket.resetInitiator(0);
+        result.add(presencePacket);
         return result;
     }
 
@@ -119,6 +137,14 @@ public class RedisMessage {
 
     public boolean isFromSelf() {
         return initiator == INSTANCE_ID;
+    }
+
+    public void resetInitiator(long initiator) {
+        this.initiator = initiator;
+        int writerIndex = this.content.writerIndex();
+        this.content.writerIndex(1);
+        this.content.writeLong(initiator);
+        this.content.writerIndex(writerIndex);
     }
 
     public enum Action {
