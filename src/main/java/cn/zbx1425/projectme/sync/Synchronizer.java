@@ -111,7 +111,10 @@ public class Synchronizer implements AutoCloseable {
                     return newEntity;
                 });
                 if (entity == null) return;
-                if (!targetLevel.tryAddFreshEntityWithPassengers(entity)) return;
+                if (!targetLevel.addFreshEntity(entity)) {
+                    ProjectMe.LOGGER.debug("Cannot add entity, for {}", player);
+                    return;
+                }
                 currentProjections.put(player, entity);
             } else {
                 currentEntity.moveOrInterpolateTo(position, yRotHead, xRot);
