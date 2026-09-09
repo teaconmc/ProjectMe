@@ -60,11 +60,6 @@ public class EntityProjection extends LivingEntity {
     }
 
     @Override
-    public boolean shouldBeSaved() {
-        return false;
-    }
-
-    @Override
     public boolean isInvulnerable() {
         return true;
     }
@@ -87,6 +82,11 @@ public class EntityProjection extends LivingEntity {
     @Override
     public boolean isInvisibleTo(Player arg) {
         return !ClientConfig.isProjectionEntityEnabled;
+    }
+
+    @Override
+    public boolean canUsePortal(boolean ignorePassenger) {
+        return false;
     }
 
     @Override
@@ -119,5 +119,9 @@ public class EntityProjection extends LivingEntity {
 
     public UUID getProjectingPlayer() {
         return entityData.get(PROJECTING_PLAYER);
+    }
+
+    public void setProjectingPlayer(UUID uuid) {
+        entityData.set(PROJECTING_PLAYER, uuid);
     }
 }

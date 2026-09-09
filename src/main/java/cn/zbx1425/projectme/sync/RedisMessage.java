@@ -105,33 +105,37 @@ public class RedisMessage {
     }
 
     public void handle(Synchronizer synchronizer) throws IOException {
-        if (isFromSelf()) return;
-        switch (action) {
-            case PLAYER_PRESENCE: {
-                int playerCount = content.readVarInt();
-                for (int i = 0; i < playerCount; i++) {
-                    UUID player = content.readUUID();
-                    boolean isVisible = content.readBoolean();
-                    if (isVisible) {
-                        String playerName = content.readUtf();
-                        ResourceKey<Level> level = content.readResourceKey(Registries.DIMENSION);
-                        Vec3 position = Vec3.STREAM_CODEC.decode(content);
-                        float yRotHead = content.readFloat();
-                        float yRotBody = content.readFloat();
-                        float xRot = content.readFloat();
-                        synchronizer.handlePlayerPresence(player, playerName, level, position,
+        try {
+            if (isFromSelf()) return;
+            switch (action) {
+                case PLAYER_PRESENCE: {
+                    int playerCount = content.readVarInt();
+                    for (int i = 0; i < playerCount; i++) {
+                        UUID player = content.readUUID();
+                        boolean isVisible = content.readBoolean();
+                        if (isVisible) {
+                            String playerName = content.readUtf();
+                            ResourceKey<Level> level = content.readResourceKey(Registries.DIMENSION);
+                            Vec3 position = Vec3.STREAM_CODEC.decode(content);
+                            float yRotHead = content.readFloat();
+                            float yRotBody = content.readFloat();
+                            float xRot = content.readFloat();
+                            synchronizer.handlePlayerPresence(player, playerName, level, position,
                                 yRotHead, yRotBody, xRot);
-                    } else {
-                        synchronizer.handlePlayerAbsence(player);
+                        } else {
+                            synchronizer.handlePlayerAbsence(player);
+                        }
                     }
+                    break;
                 }
-                break;
+                case PLAYER_ABSENCE: {
+                    UUID player = content.readUUID();
+                    synchronizer.handlePlayerAbsence(player);
+                    break;
+                }
             }
-            case PLAYER_ABSENCE: {
-                UUID player = content.readUUID();
-                synchronizer.handlePlayerAbsence(player);
-                break;
-            }
+        } finally {
+            content.release();
         }
     }
 

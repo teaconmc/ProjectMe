@@ -13,12 +13,14 @@ import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
@@ -84,38 +86,29 @@ public class Synchronizer implements AutoCloseable {
                 return;
             }
             if (currentEntity == null || currentEntity.isRemoved()
-                    || currentEntity.level().getEntity(currentEntity.getId()) == null
-                    || !currentEntity.level().dimension().equals(level)) {
+                || !currentEntity.level().dimension().equals(level)) {
                 if (currentEntity != null) {
-                    if (currentEntity.level().getEntity(currentEntity.getId()) == null && !currentEntity.isRemoved()) {
-                        ProjectMe.LOGGER.warn("EntityProjection not in level while not removed, player: {}", player);
-                    }
                     currentEntity.discard();
                     currentProjections.remove(player);
                 }
                 ServerLevel targetLevel = server.getLevel(level);
                 if (targetLevel == null) return;
-                if (!targetLevel.isLoaded(new BlockPos((int) position.x, (int) position.y, (int) position.z))) return;
-                CompoundTag entityInitData = new CompoundTag();
-                entityInitData.putString("id", ProjectMe.id("projection").toString());
-                entityInitData.store("projectingPlayer", UUIDUtil.CODEC, player);
-                entityInitData.putLong("addedAt", System.currentTimeMillis());
-                entityInitData.putBoolean("NoGravity", true);
-                entityInitData.putString("CustomName", playerName);
-                EntityProjection entity = (EntityProjection) EntityType.loadEntityRecursive(entityInitData, targetLevel, EntitySpawnReason.DIMENSION_TRAVEL, newEntity -> {
-                    newEntity.setPos(position);
-                    newEntity.setYRot(yRotHead);
-                    newEntity.setXRot(xRot);
-                    newEntity.setYHeadRot(yRotHead);
-                    newEntity.setYBodyRot(yRotBody);
-                    return newEntity;
-                });
-                if (entity == null) return;
-                if (!targetLevel.addFreshEntity(entity)) {
+                if (!targetLevel.areEntitiesLoaded(ChunkPos.containing(BlockPos.containing(position)).pack())) return;
+                EntityProjection newEntity = ProjectMe.ENTITY_PROJECTION.get().create(targetLevel, EntitySpawnReason.COMMAND);
+                if (newEntity == null) return;
+                newEntity.setProjectingPlayer(player);
+                newEntity.setNoGravity(true);
+                newEntity.setCustomName(Component.literal(playerName));
+                newEntity.setPos(position);
+                newEntity.setYRot(yRotHead);
+                newEntity.setXRot(xRot);
+                newEntity.setYHeadRot(yRotHead);
+                newEntity.setYBodyRot(yRotBody);
+                if (!targetLevel.addFreshEntity(newEntity)) {
                     ProjectMe.LOGGER.warn("Cannot add entity, player: {}", player);
                     return;
                 }
-                currentProjections.put(player, entity);
+                currentProjections.put(player, newEntity);
             } else {
                 currentEntity.moveOrInterpolateTo(position, yRotHead, xRot);
                 currentEntity.setYHeadRot(yRotHead);
@@ -136,6 +129,10 @@ public class Synchronizer implements AutoCloseable {
                 currentProjections.remove(player);
             }
         });
+    }
+
+    public MinecraftServer getServer() {
+        return server;
     }
 
 	@Override

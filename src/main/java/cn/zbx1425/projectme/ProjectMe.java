@@ -51,8 +51,13 @@ public class ProjectMe {
     public static final DeferredRegister<EntityDataSerializer<?>> ENTITY_DATA_SERIALIZERS = DeferredRegister.create(NeoForgeRegistries.ENTITY_DATA_SERIALIZERS, MOD_ID);
 
     public static final Supplier<EntityType<EntityProjection>> ENTITY_PROJECTION = ENTITY_TYPES.register("projection",
-            () -> EntityType.Builder.of(EntityProjection::new, MobCategory.CREATURE).sized(0.6f, 1.8f)
-                .build(ResourceKey.create(Registries.ENTITY_TYPE, id("projection"))));
+            () -> EntityType.Builder.of(EntityProjection::new, MobCategory.MISC)
+                .sized(0.6f, 1.8f)
+                .noSave()
+                .noSummon()
+                .fireImmune()
+                .build(ResourceKey.create(Registries.ENTITY_TYPE, id("projection")))
+    );
 
     public static final Supplier<EntityDataSerializer<UUID>> UUID_ENTITY_DATA_SERIALIZER = ENTITY_DATA_SERIALIZERS.register("uuid",
             () -> EntityDataSerializer.forValueType(UUIDUtil.STREAM_CODEC));
