@@ -271,6 +271,10 @@ public class Synchronizer implements AutoCloseable {
         return server;
     }
 
+    public int getPeerCount() {
+        return peerStates.size();
+    }
+
     @Override
     public void close() {
         redisSub.close();

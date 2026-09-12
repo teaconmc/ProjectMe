@@ -7,9 +7,11 @@ import cn.zbx1425.projectme.compat.impl.VanillaCompatibility;
 import cn.zbx1425.projectme.entity.EntityProjection;
 import cn.zbx1425.projectme.sync.RedisMessage;
 import cn.zbx1425.projectme.sync.Synchronizer;
+import net.minecraft.commands.Commands;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataSerializer;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
@@ -23,7 +25,9 @@ import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.attachment.AttachmentType;
+import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.entity.EntityAttributeCreationEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
@@ -125,7 +129,7 @@ public class ProjectMe {
             if (synchronizer == null) return;
             if (event.getServer().getTickCount() % CONFIG.syncInterval.value == 0) {
                 synchronizer.notifyPlayerPresence(event.getServer().getPlayerList().getPlayers());
-                synchronizer.mockPlayerPresence();
+//                synchronizer.mockPlayerPresence();
             }
             synchronizer.checkPeerTimeouts(event.getServer().getTickCount());
         }
@@ -141,6 +145,23 @@ public class ProjectMe {
             if (synchronizer == null) return;
             // For the fake tab entry tracking to stay consistent.
             synchronizer.onLocalPlayerLeave(event.getEntity().getGameProfile().id());
+        }
+
+        @SubscribeEvent
+        public static void registerCommands(RegisterCommandsEvent event) {
+            event.getDispatcher().register(Commands.literal("projectmes").then(
+                Commands.literal("info").executes(ctx -> {
+                    if (synchronizer == null) {
+                        ctx.getSource().sendFailure(Component.literal("ProjectMe is not configured."));
+                        return 0;
+                    }
+                    ctx.getSource().sendSystemMessage(Component.literal(
+                        "ProjectMe on pod " + CONFIG.peerId.value + " welcomes you to the cluster!"));
+                    ctx.getSource().sendSystemMessage(Component.literal(
+                        "They have met " + synchronizer.getPeerCount() + " peers."));
+                    return 1;
+                })
+            ));
         }
     }
 
