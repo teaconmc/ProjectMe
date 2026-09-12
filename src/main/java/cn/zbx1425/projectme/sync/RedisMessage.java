@@ -17,71 +17,64 @@ public class RedisMessage {
 
     public static final String COMMAND_CHANNEL = "PROJECT_ME_COMMAND_CHANNEL";
 
-    private static final long INSTANCE_ID = new Random().nextLong();
+    private static String PEER_ID = UUID.randomUUID().toString();
 
-    public long initiator;
-    public Action action;
-    public FriendlyByteBuf content;
-
-    private RedisMessage(Action action) {
-        this(action, INSTANCE_ID);
+    public static void setPeerId(String peerId) {
+        PEER_ID = peerId;
     }
 
-    private RedisMessage(Action action, long initiator) {
-        this.initiator = initiator;
-        this.action = action;
+    public String peerId;
+    public FriendlyByteBuf content;
+
+    private RedisMessage(String peerId) {
+        this.peerId = peerId;
         this.content = new FriendlyByteBuf(Unpooled.buffer());
-        content.writeByte(action.ordinal());
-        content.writeLong(initiator);
+        content.writeUtf(peerId);
+    }
+
+    private RedisMessage() {
+        this(PEER_ID);
     }
 
     protected RedisMessage(ByteBuf src) {
         this.content = new FriendlyByteBuf(src);
-        this.action = Action.values()[content.readByte()];
-        this.initiator = content.readLong();
+        this.peerId = content.readUtf();
     }
 
     public static RedisMessage beginPlayerPresence(int playerCount) {
-        RedisMessage result = new RedisMessage(Action.PLAYER_PRESENCE);
+        RedisMessage result = new RedisMessage();
         result.content.writeVarInt(playerCount);
         return result;
     }
 
-    public RedisMessage andWithPlayer(ServerPlayer player, boolean isVisible) {
+    public RedisMessage andWithPlayer(ServerPlayer player) {
         content.writeUUID(player.getGameProfile().id());
-        content.writeBoolean(isVisible);
-        if (isVisible) {
-            content.writeUtf(player.getDisplayName().getString());
-            content.writeResourceKey(player.level().dimension());
-            Vec3.STREAM_CODEC.encode(content, player.position());
-            content.writeFloat(player.getYHeadRot());
-            content.writeFloat(player.getYRot());
-            content.writeFloat(player.getXRot());
-        }
+        content.writeUtf(player.getDisplayName().getString());
+        content.writeResourceKey(player.level().dimension());
+        Vec3.STREAM_CODEC.encode(content, player.position());
+        content.writeFloat(player.getYHeadRot());
+        content.writeFloat(player.getYRot());
+        content.writeFloat(player.getXRot());
         return this;
     }
 
     private static final ArrayDeque<UUID> mockPlayers = new ArrayDeque<>();
     private static final Random random = new Random();
 
-    public static List<RedisMessage> mockPlayerPresence() {
-        List<RedisMessage> result = new ArrayList<>();
-        if (random.nextInt(100) < 1) {
-            if (random.nextBoolean() || mockPlayers.size() >= 20) {
+    public static RedisMessage mockPlayerPresence() {
+        if (random.nextInt(mockPlayers.size() < 10 ? 10 : 100) < 1) {
+            if (random.nextInt(3) < 1 || mockPlayers.size() >= 20) {
                 if (!mockPlayers.isEmpty()) {
-                    UUID playerLeft = mockPlayers.pop();
-                    RedisMessage absencePacket = playerAbsence(playerLeft);
-                    absencePacket.resetInitiator(0);
-                    result.add(absencePacket);
+                    mockPlayers.pop();
                 }
             } else {
                 mockPlayers.add(UUID.randomUUID());
             }
         }
-        RedisMessage presencePacket = beginPlayerPresence(mockPlayers.size());
+        RedisMessage presencePacket = new RedisMessage("mock-peer");
+        presencePacket.content.writeVarInt(mockPlayers.size());
         for (UUID player : mockPlayers) {
             presencePacket.content.writeUUID(player);
-            presencePacket.content.writeBoolean(true);
             presencePacket.content.writeUtf(player.toString().substring(0, 8));
             presencePacket.content.writeResourceKey(Level.OVERWORLD);
             Vec3.STREAM_CODEC.encode(presencePacket.content, new Vec3(random.nextDouble(-10, 10), -60, random.nextDouble(-10, 10)));
@@ -89,15 +82,7 @@ public class RedisMessage {
             presencePacket.content.writeFloat(0);
             presencePacket.content.writeFloat(0);
         }
-        presencePacket.resetInitiator(0);
-        result.add(presencePacket);
-        return result;
-    }
-
-    public static RedisMessage playerAbsence(UUID uuid) {
-        RedisMessage result = new RedisMessage(Action.PLAYER_ABSENCE);
-        result.content.writeUUID(uuid);
-        return result;
+        return presencePacket;
     }
 
     public void publishAsync(StatefulRedisConnection<String, ByteBuf> connection) {
@@ -107,51 +92,25 @@ public class RedisMessage {
     public void handle(Synchronizer synchronizer) throws IOException {
         try {
             if (isFromSelf()) return;
-            switch (action) {
-                case PLAYER_PRESENCE: {
-                    int playerCount = content.readVarInt();
-                    for (int i = 0; i < playerCount; i++) {
-                        UUID player = content.readUUID();
-                        boolean isVisible = content.readBoolean();
-                        if (isVisible) {
-                            String playerName = content.readUtf();
-                            ResourceKey<Level> level = content.readResourceKey(Registries.DIMENSION);
-                            Vec3 position = Vec3.STREAM_CODEC.decode(content);
-                            float yRotHead = content.readFloat();
-                            float yRotBody = content.readFloat();
-                            float xRot = content.readFloat();
-                            synchronizer.handlePlayerPresence(player, playerName, level, position,
-                                yRotHead, yRotBody, xRot);
-                        } else {
-                            synchronizer.handlePlayerAbsence(player);
-                        }
-                    }
-                    break;
-                }
-                case PLAYER_ABSENCE: {
-                    UUID player = content.readUUID();
-                    synchronizer.handlePlayerAbsence(player);
-                    break;
-                }
+            int playerCount = content.readVarInt();
+            Map<UUID, Synchronizer.RemotePlayerData> players = new HashMap<>();
+            for (int i = 0; i < playerCount; i++) {
+                UUID uuid = content.readUUID();
+                String playerName = content.readUtf();
+                ResourceKey<Level> level = content.readResourceKey(Registries.DIMENSION);
+                Vec3 position = Vec3.STREAM_CODEC.decode(content);
+                float yRotHead = content.readFloat();
+                float yRotBody = content.readFloat();
+                float xRot = content.readFloat();
+                players.put(uuid, new Synchronizer.RemotePlayerData(playerName, level, position, yRotHead, yRotBody, xRot));
             }
+            synchronizer.handlePeerPresence(peerId, players);
         } finally {
             content.release();
         }
     }
 
     public boolean isFromSelf() {
-        return initiator == INSTANCE_ID;
-    }
-
-    public void resetInitiator(long initiator) {
-        this.initiator = initiator;
-        int writerIndex = this.content.writerIndex();
-        this.content.writerIndex(1);
-        this.content.writeLong(initiator);
-        this.content.writerIndex(writerIndex);
-    }
-
-    public enum Action {
-        PLAYER_PRESENCE, PLAYER_ABSENCE
+        return PEER_ID.equals(peerId);
     }
 }

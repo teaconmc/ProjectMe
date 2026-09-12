@@ -5,6 +5,7 @@ import cn.zbx1425.projectme.compat.ICompatibility;
 import cn.zbx1425.projectme.compat.impl.MTRCompatibility;
 import cn.zbx1425.projectme.compat.impl.VanillaCompatibility;
 import cn.zbx1425.projectme.entity.EntityProjection;
+import cn.zbx1425.projectme.sync.RedisMessage;
 import cn.zbx1425.projectme.sync.Synchronizer;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -16,7 +17,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Util;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
-import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModList;
@@ -36,16 +36,14 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Supplier;
 
 @Mod(ProjectMe.MOD_ID)
 public class ProjectMe {
 
     public static final String MOD_ID = "project_me";
-    public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+    public static final Logger LOGGER = LoggerFactory.getLogger("ProjectMe");
 
     public static final DeferredRegister<EntityType<?>> ENTITY_TYPES = DeferredRegister.create(BuiltInRegistries.ENTITY_TYPE, MOD_ID);
     public static final DeferredRegister<EntityDataSerializer<?>> ENTITY_DATA_SERIALIZERS = DeferredRegister.create(NeoForgeRegistries.ENTITY_DATA_SERIALIZERS, MOD_ID);
@@ -103,6 +101,8 @@ public class ProjectMe {
                 if (synchronizer != null) synchronizer.close();
                 CONFIG.load(event.getServer().getServerDirectory()
                         .resolve("config").resolve("project_me.json"));
+                RedisMessage.setPeerId(CONFIG.peerId.value);
+                LOGGER.info("ProjectMe peer ID: {}", CONFIG.peerId.value);
                 synchronizer = new Synchronizer(CONFIG.redisUrl.value, event.getServer());
             } catch (Exception ex) {
                 ProjectMe.LOGGER.error("Failed to use server config", ex);
@@ -125,14 +125,22 @@ public class ProjectMe {
             if (synchronizer == null) return;
             if (event.getServer().getTickCount() % CONFIG.syncInterval.value == 0) {
                 synchronizer.notifyPlayerPresence(event.getServer().getPlayerList().getPlayers());
-//                synchronizer.mockPlayerPresence();
+                synchronizer.mockPlayerPresence();
             }
+            synchronizer.checkPeerTimeouts(event.getServer().getTickCount());
+        }
+
+        @SubscribeEvent
+        public static void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
+            if (synchronizer == null) return;
+            synchronizer.sendAllFakeTabEntriesToPlayer((ServerPlayer) event.getEntity());
         }
 
         @SubscribeEvent
         public static void onPlayerLeave(PlayerEvent.PlayerLoggedOutEvent event) {
             if (synchronizer == null) return;
-            synchronizer.notifyPlayerAbsence(event.getEntity().getGameProfile().id());
+            // For the fake tab entry tracking to stay consistent.
+            synchronizer.onLocalPlayerLeave(event.getEntity().getGameProfile().id());
         }
     }
 

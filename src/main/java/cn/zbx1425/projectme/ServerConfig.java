@@ -7,13 +7,17 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.UUID;
 
 public class ServerConfig {
 
     public ConfigItem<String> redisUrl;
     public ConfigItem<Integer> syncInterval;
+    public ConfigItem<String> peerId;
+    public ConfigItem<Integer> peerTimeout;
 
     public void load(Path configPath) throws IOException {
         JsonObject json = Files.exists(configPath)
@@ -22,14 +26,34 @@ public class ServerConfig {
         redisUrl = new ConfigItem<>(json, "redisUrl", "");
         syncInterval = new ConfigItem<>(json, "syncInterval", "1",
                 Object::toString, Integer::parseInt);
+        peerId = new ConfigItem<>(json, "peerId", "");
+        peerTimeout = new ConfigItem<>(json, "peerTimeout", "100",
+                Object::toString, Integer::parseInt);
+
+        if (peerId.value.isEmpty()) {
+            peerId.value = resolvePeerId();
+        }
 
         if (!Files.exists(configPath)) save(configPath);
+    }
+
+    private static String resolvePeerId() {
+        String hostname = System.getenv("HOSTNAME");
+        if (hostname != null && !hostname.isEmpty()) return hostname;
+        try {
+            String localHostName = InetAddress.getLocalHost().getHostName();
+            if (localHostName != null && !localHostName.isEmpty()) return localHostName;
+        } catch (Exception ignored) {
+        }
+        return UUID.randomUUID().toString();
     }
 
     public void save(Path configPath) throws IOException {
         JsonObject json = new JsonObject();
         redisUrl.writeJson(json);
         syncInterval.writeJson(json);
+        peerId.writeJson(json);
+        peerTimeout.writeJson(json);
 
         Files.writeString(configPath, new GsonBuilder().setPrettyPrinting().create().toJson(json));
     }
