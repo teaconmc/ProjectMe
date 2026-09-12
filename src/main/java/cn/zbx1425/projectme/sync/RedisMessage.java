@@ -49,7 +49,7 @@ public class RedisMessage {
 
     public RedisMessage andWithPlayer(ServerPlayer player) {
         content.writeUUID(player.getGameProfile().id());
-        content.writeUtf(player.getDisplayName().getString());
+        content.writeUtf(player.getGameProfile().name());
         content.writeResourceKey(player.level().dimension());
         Vec3.STREAM_CODEC.encode(content, player.position());
         content.writeFloat(player.getYHeadRot());

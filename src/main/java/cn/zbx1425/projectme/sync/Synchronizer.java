@@ -226,9 +226,9 @@ public class Synchronizer implements AutoCloseable {
                 buf.writeVarInt(GameType.SURVIVAL.getId());
                 // UPDATE_LISTED
                 buf.writeBoolean(true);
-                // UPDATE_LATENCY (>= 1000 → worst signal bar)
+                // UPDATE_LATENCY
                 buf.writeVarInt(-1);
-                // UPDATE_DISPLAY_NAME (italic)
+                // UPDATE_DISPLAY_NAME
                 FriendlyByteBuf.writeNullable(buf,
                         Component.literal(entry.getValue()).withStyle(ChatFormatting.ITALIC).withStyle(ChatFormatting.GRAY),
                         ComponentSerialization.TRUSTED_STREAM_CODEC);
@@ -239,13 +239,26 @@ public class Synchronizer implements AutoCloseable {
         }
     }
 
+    public void onLocalPlayerJoin(ServerPlayer player) {
+        UUID uuid = player.getGameProfile().id();
+        EntityProjection proj = currentProjections.remove(uuid);
+        if (proj != null) proj.discard();
+        currentFakeTabEntries.remove(uuid);
+
+        sendAllFakeTabEntriesToPlayer(player);
+    }
+
     public void sendAllFakeTabEntriesToPlayer(ServerPlayer player) {
         if (currentFakeTabEntries.isEmpty()) return;
-        player.connection.send(createFakePlayerInfoPacket(currentFakeTabEntries));
+        Map<UUID, String> toSend = new HashMap<>(currentFakeTabEntries);
+        toSend.keySet().removeIf(uuid -> server.getPlayerList().getPlayer(uuid) != null);
+        if (toSend.isEmpty()) return;
+        player.connection.send(createFakePlayerInfoPacket(toSend));
     }
 
     public void onLocalPlayerLeave(UUID playerUuid) {
         currentFakeTabEntries.remove(playerUuid);
+        server.execute(this::reconcileGlobalState);
     }
 
     private void broadcastPacket(Packet<?> packet) {

@@ -133,7 +133,7 @@ public class ProjectMe {
         @SubscribeEvent
         public static void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
             if (synchronizer == null) return;
-            synchronizer.sendAllFakeTabEntriesToPlayer((ServerPlayer) event.getEntity());
+            synchronizer.onLocalPlayerJoin((ServerPlayer) event.getEntity());
         }
 
         @SubscribeEvent
