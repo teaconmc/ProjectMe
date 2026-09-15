@@ -1,10 +1,12 @@
 package cn.zbx1425.projectme.mixin;
 
 import cn.zbx1425.projectme.ProjectMe;
+import net.minecraft.network.Connection;
 import net.minecraft.network.chat.ChatType;
 import net.minecraft.network.chat.PlayerChatMessage;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.players.PlayerList;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -17,6 +19,22 @@ import java.util.function.Predicate;
 
 @Mixin(PlayerList.class)
 public class PlayerListMixin {
+
+    @Inject(
+        method = "placeNewPlayer",
+        at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/server/level/ServerLevel;addNewPlayer(Lnet/minecraft/server/level/ServerPlayer;)V"
+        )
+    )
+    private void sendFakeTabBeforeEntityPairing(Connection connection,
+                                                          ServerPlayer player,
+                                                          CommonListenerCookie cookie,
+                                                          CallbackInfo ci) {
+        if (ProjectMe.synchronizer != null) {
+            ProjectMe.synchronizer.sendAllFakeTabEntriesToPlayer(player);
+        }
+    }
 
     @Unique
     private static final Set<ResourceKey<ChatType>> PROJECT_ME$SYNCED_CHAT_TYPES = Set.of(

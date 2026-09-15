@@ -7,12 +7,6 @@ import cn.zbx1425.projectme.sync.message.PresenceRedisMessage;
 import cn.zbx1425.projectme.sync.message.RedisConnection;
 import cn.zbx1425.projectme.sync.message.RedisMessage;
 import com.mojang.authlib.GameProfile;
-import io.lettuce.core.RedisClient;
-import io.lettuce.core.api.StatefulRedisConnection;
-import io.lettuce.core.codec.RedisCodec;
-import io.lettuce.core.codec.StringCodec;
-import io.lettuce.core.pubsub.RedisPubSubListener;
-import io.lettuce.core.pubsub.StatefulRedisPubSubConnection;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import net.minecraft.ChatFormatting;
@@ -37,7 +31,6 @@ import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
-import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.function.Function;
 
@@ -133,8 +126,8 @@ public class Synchronizer implements AutoCloseable {
             }
         }
 
-        updateProjections(readyRemotes);
         updateFakeTabEntries(readyRemotes);
+        updateProjections(readyRemotes);
     }
 
     private void updateProjections(Map<UUID, RemotePlayerData> remotes) {
@@ -299,8 +292,9 @@ public class Synchronizer implements AutoCloseable {
                 }
             }
         }
-
-        sendAllFakeTabEntriesToPlayer(player);
+        // Note: sendAllFakeTabEntriesToPlayer is called from PlayerListMixin
+        // before addNewPlayer (within the suspendFlushing window) to ensure
+        // fake tab entries arrive before EntityProjection spawn packets.
     }
 
     public void sendAllFakeTabEntriesToPlayer(ServerPlayer player) {
@@ -334,7 +328,9 @@ public class Synchronizer implements AutoCloseable {
             }
             OutgoingChatMessage disguised = new OutgoingChatMessage.Disguised(chatContent);
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-                player.sendChatMessage(disguised, false, bound);
+                if (!player.getGameProfile().id().equals(senderUuid)) {
+                    player.sendChatMessage(disguised, false, bound);
+                }
             }
             server.logChatMessage(chatContent, bound, "Cluster");
         });

@@ -5,8 +5,8 @@ import cn.zbx1425.projectme.compat.ICompatibility;
 import cn.zbx1425.projectme.compat.impl.MTRCompatibility;
 import cn.zbx1425.projectme.compat.impl.VanillaCompatibility;
 import cn.zbx1425.projectme.entity.EntityProjection;
-import cn.zbx1425.projectme.sync.message.PresenceRedisMessage;
 import cn.zbx1425.projectme.sync.Synchronizer;
+import cn.zbx1425.projectme.sync.message.RedisMessage;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -104,7 +104,7 @@ public class ProjectMe {
                 if (synchronizer != null) synchronizer.close();
                 CONFIG.load(event.getServer().getServerDirectory()
                         .resolve("config").resolve("project_me.json"));
-                PresenceRedisMessage.setPeerId(CONFIG.peerId.value);
+                RedisMessage.setSelfPeerId(CONFIG.peerId.value);
                 LOGGER.info("ProjectMe peer ID: {}", CONFIG.peerId.value);
                 synchronizer = new Synchronizer(CONFIG.redisUrl.value, event.getServer());
             } catch (Exception ex) {

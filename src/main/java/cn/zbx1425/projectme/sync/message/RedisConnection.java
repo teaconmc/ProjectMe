@@ -27,13 +27,13 @@ public class RedisConnection implements AutoCloseable, Supplier<StatefulRedisCon
     private final Synchronizer synchronizer;
 
     private RedisConnection(RedisURI redisUrl, Map<String, Function<ByteBuf, ? extends RedisMessage>> subscribers, Synchronizer synchronizer) {
+        this.subscribers = subscribers;
+        this.synchronizer = synchronizer;
         redisClient = RedisClient.create(redisUrl);
         redisConn = redisClient.connect(ByteBufCodec.INSTANCE);
         redisSub = redisClient.connectPubSub(ByteBufCodec.INSTANCE);
         redisSub.addListener(new Listener());
         redisSub.sync().subscribe(subscribers.keySet().toArray(String[]::new));
-        this.subscribers = subscribers;
-        this.synchronizer = synchronizer;
     }
 
     public static RedisConnection create(String uri, Map<String, Function<ByteBuf, ? extends RedisMessage>> subscribers, Synchronizer synchronizer) {
@@ -62,6 +62,8 @@ public class RedisConnection implements AutoCloseable, Supplier<StatefulRedisCon
                 message.handle(synchronizer);
             } catch (Exception ex) {
                 ProjectMe.LOGGER.error("Redis handler on channel {}", channel, ex);
+            } finally {
+                rawMessage.release();
             }
         }
 

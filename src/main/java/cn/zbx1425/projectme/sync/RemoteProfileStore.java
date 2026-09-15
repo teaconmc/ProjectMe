@@ -16,6 +16,8 @@ public class RemoteProfileStore {
 
     static final String REDIS_PROFILES_KEY = "projectme:profiles";
     private static final int MAX_RETRIES = 100;
+    private static final int MAX_NIL_RETRIES = 100;
+    private static final long NIL_RETRY_DELAY_MS = 200;
 
     private final StatefulRedisConnection<String, ByteBuf> redisConn;
     private final Executor serverExecutor;
@@ -56,14 +58,22 @@ public class RemoteProfileStore {
     public boolean fetchProfileIfNeeded(UUID uuid) {
         if (knownProfiles.containsKey(uuid) || fetchInFlight.contains(uuid)) return false;
         fetchInFlight.add(uuid);
-        fetchProfileWithRetry(uuid, 0);
+        fetchProfileWithRetry(uuid, 0, 0);
         return true;
     }
 
-    private void fetchProfileWithRetry(UUID uuid, int attempt) {
+    private void fetchProfileWithRetry(UUID uuid, int attempt, int nilCount) {
         redisConn.async().hget(REDIS_PROFILES_KEY, uuid.toString())
                 .whenComplete((profileBytes, ex) -> {
-                    if (profileBytes != null && ex == null) {
+                    if (ex != null) {
+                        if (profileBytes != null) profileBytes.release();
+                        scheduleRetry(attempt,
+                                () -> fetchProfileWithRetry(uuid, attempt + 1, nilCount),
+                                "fetch profile", uuid, ex);
+                        if (attempt >= MAX_RETRIES) {
+                            serverExecutor.execute(() -> fetchInFlight.remove(uuid));
+                        }
+                    } else if (profileBytes != null) {
                         serverExecutor.execute(() -> {
                             try {
                                 GameProfile profile = ByteBufCodecs.GAME_PROFILE.decode(profileBytes);
@@ -74,11 +84,11 @@ public class RemoteProfileStore {
                             }
                         });
                     } else {
-                        if (profileBytes != null) profileBytes.release();
-                        scheduleRetry(attempt,
-                                () -> fetchProfileWithRetry(uuid, attempt + 1),
-                                "fetch profile", uuid, ex);
-                        if (attempt >= MAX_RETRIES) {
+                        // nil — key doesn't exist yet (e.g. transfer race). Short fixed-delay retry.
+                        if (nilCount < MAX_NIL_RETRIES) {
+                            CompletableFuture.delayedExecutor(NIL_RETRY_DELAY_MS, TimeUnit.MILLISECONDS)
+                                    .execute(() -> fetchProfileWithRetry(uuid, attempt, nilCount + 1));
+                        } else {
                             serverExecutor.execute(() -> fetchInFlight.remove(uuid));
                         }
                     }

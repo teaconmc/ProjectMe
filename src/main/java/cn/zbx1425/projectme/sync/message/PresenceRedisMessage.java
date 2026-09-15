@@ -54,25 +54,21 @@ public class PresenceRedisMessage extends RedisMessage {
 
     @Override
     public void handle(Synchronizer synchronizer) {
-        try {
-            if (isFromSelf()) return;
-            int playerCount = content.readVarInt();
-            Map<UUID, Synchronizer.RemotePlayerData> players = new HashMap<>();
-            for (int i = 0; i < playerCount; i++) {
-                UUID uuid = content.readUUID();
-                String playerName = content.readUtf();
-                ResourceKey<Level> level = content.readResourceKey(Registries.DIMENSION);
-                Vec3 position = Vec3.STREAM_CODEC.decode(content);
-                float yRotHead = content.readFloat();
-                float yRotBody = content.readFloat();
-                float xRot = content.readFloat();
-                boolean visible = content.readBoolean();
-                players.put(uuid, new Synchronizer.RemotePlayerData(playerName, level, position, yRotHead, yRotBody, xRot, visible));
-            }
-            synchronizer.handlePeerPresence(peerId, players);
-        } finally {
-            content.release();
+        if (isFromSelf()) return;
+        int playerCount = content.readVarInt();
+        Map<UUID, Synchronizer.RemotePlayerData> players = new HashMap<>();
+        for (int i = 0; i < playerCount; i++) {
+            UUID uuid = content.readUUID();
+            String playerName = content.readUtf();
+            ResourceKey<Level> level = content.readResourceKey(Registries.DIMENSION);
+            Vec3 position = Vec3.STREAM_CODEC.decode(content);
+            float yRotHead = content.readFloat();
+            float yRotBody = content.readFloat();
+            float xRot = content.readFloat();
+            boolean visible = content.readBoolean();
+            players.put(uuid, new Synchronizer.RemotePlayerData(playerName, level, position, yRotHead, yRotBody, xRot, visible));
         }
+        synchronizer.handlePeerPresence(peerId, players);
     }
 
     @Override
