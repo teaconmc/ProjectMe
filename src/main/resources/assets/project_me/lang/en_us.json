@@ -13,5 +13,10 @@
   "project_me.command.info.total_plural": "%s players are currently connected to the cluster.",
   "project_me.command.info.peers_singular": "This server is connected to %s other active container group in the cluster.",
   "project_me.command.info.peers_plural": "This server is connected to %s other active container groups in the cluster.",
-  "project_me.command.info.you_are_at": "You are at: %s"
+  "project_me.command.info.you_are_at": "You are at: %s",
+
+  "project_me.tab.header": "TeaCon 2026",
+  "project_me.tab.footer": "Players in %s are on other sub-servers; use %s to go there",
+  "project_me.tab.footer.style": "gray",
+  "project_me.tab.footer.command": "/go <username>"
 }

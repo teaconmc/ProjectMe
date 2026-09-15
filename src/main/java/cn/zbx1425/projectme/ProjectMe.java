@@ -133,8 +133,10 @@ public class ProjectMe {
 
         @SubscribeEvent
         public static void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
+            ServerPlayer player = (ServerPlayer) event.getEntity();
+            PlayerListHeaderFooter.apply(player);
             if (synchronizer == null) return;
-            synchronizer.onLocalPlayerJoin((ServerPlayer) event.getEntity());
+            synchronizer.onLocalPlayerJoin(player);
         }
 
         @SubscribeEvent
