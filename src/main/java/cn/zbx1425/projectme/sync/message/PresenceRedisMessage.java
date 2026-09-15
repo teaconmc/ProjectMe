@@ -1,61 +1,46 @@
-package cn.zbx1425.projectme.sync;
+package cn.zbx1425.projectme.sync.message;
 
-import io.lettuce.core.api.StatefulRedisConnection;
+import cn.zbx1425.projectme.sync.Synchronizer;
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
-import java.io.IOException;
 import java.util.*;
 
-public class RedisMessage {
+public class PresenceRedisMessage extends RedisMessage {
 
-    public static final String COMMAND_CHANNEL = "PROJECT_ME_COMMAND_CHANNEL";
+    public static final String CHANNEL = "projectme:presence";
 
-    private static String PEER_ID = UUID.randomUUID().toString();
-
-    public static void setPeerId(String peerId) {
-        PEER_ID = peerId;
+    private PresenceRedisMessage(String peerId) {
+        super(peerId);
     }
 
-    public String peerId;
-    public FriendlyByteBuf content;
-
-    private RedisMessage(String peerId) {
-        this.peerId = peerId;
-        this.content = new FriendlyByteBuf(Unpooled.buffer());
-        content.writeUtf(peerId);
+    public PresenceRedisMessage(ByteBuf src) {
+        super(src);
     }
 
-    protected RedisMessage(ByteBuf src) {
-        this.content = new FriendlyByteBuf(src);
-        this.peerId = content.readUtf();
+    public static PresenceRedisMessage beginPlayerPresence(int playerCount) {
+        return beginPlayerPresence(SELF_PEER_ID, playerCount);
     }
 
-    public static RedisMessage beginPlayerPresence(int playerCount) {
-        return beginPlayerPresence(PEER_ID, playerCount);
-    }
-
-    public static RedisMessage beginPlayerPresence(String peerId, int playerCount) {
-        RedisMessage result = new RedisMessage(peerId);
+    public static PresenceRedisMessage beginPlayerPresence(String peerId, int playerCount) {
+        PresenceRedisMessage result = new PresenceRedisMessage(peerId);
         result.content.writeVarInt(playerCount);
         return result;
     }
 
-    public RedisMessage andWithPlayer(ServerPlayer player, boolean visible) {
+    public PresenceRedisMessage andWithPlayer(ServerPlayer player, boolean visible) {
         return andWithPlayerData(player.getGameProfile().id(), player.getGameProfile().name(),
                 player.level().dimension(), player.position(),
                 player.getYHeadRot(), player.getYRot(), player.getXRot(), visible);
     }
 
-    public RedisMessage andWithPlayerData(UUID uuid, String name, ResourceKey<Level> level,
-                                          Vec3 position, float yRotHead, float yRotBody,
-                                          float xRot, boolean visible) {
+    public PresenceRedisMessage andWithPlayerData(UUID uuid, String name, ResourceKey<Level> level,
+                                                  Vec3 position, float yRotHead, float yRotBody,
+                                                  float xRot, boolean visible) {
         content.writeUUID(uuid);
         content.writeUtf(name);
         content.writeResourceKey(level);
@@ -67,11 +52,8 @@ public class RedisMessage {
         return this;
     }
 
-    public void publishAsync(StatefulRedisConnection<String, ByteBuf> connection) {
-        connection.async().publish(COMMAND_CHANNEL, content);
-    }
-
-    public void handle(Synchronizer synchronizer) throws IOException {
+    @Override
+    public void handle(Synchronizer synchronizer) {
         try {
             if (isFromSelf()) return;
             int playerCount = content.readVarInt();
@@ -93,7 +75,8 @@ public class RedisMessage {
         }
     }
 
-    public boolean isFromSelf() {
-        return PEER_ID.equals(peerId);
+    @Override
+    public String channel() {
+        return CHANNEL;
     }
 }

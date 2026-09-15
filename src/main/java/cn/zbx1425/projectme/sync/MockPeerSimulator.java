@@ -1,5 +1,6 @@
 package cn.zbx1425.projectme.sync;
 
+import cn.zbx1425.projectme.sync.message.PresenceRedisMessage;
 import com.mojang.authlib.GameProfile;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.netty.buffer.ByteBuf;
@@ -40,7 +41,7 @@ public class MockPeerSimulator {
         }
 
         long now = System.currentTimeMillis();
-        RedisMessage msg = RedisMessage.beginPlayerPresence(MOCK_PEER_ID, mockPlayers.size());
+        PresenceRedisMessage msg = PresenceRedisMessage.beginPlayerPresence(MOCK_PEER_ID, mockPlayers.size());
         for (var entry : mockPlayers.entrySet()) {
             UUID uuid = entry.getKey();
             boolean visible = ((now - entry.getValue()) / 2000) % 2 == 0;

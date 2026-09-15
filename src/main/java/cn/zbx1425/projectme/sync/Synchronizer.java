@@ -2,6 +2,10 @@ package cn.zbx1425.projectme.sync;
 
 import cn.zbx1425.projectme.ProjectMe;
 import cn.zbx1425.projectme.entity.EntityProjection;
+import cn.zbx1425.projectme.sync.message.ChatRedisMessage;
+import cn.zbx1425.projectme.sync.message.PresenceRedisMessage;
+import cn.zbx1425.projectme.sync.message.RedisConnection;
+import cn.zbx1425.projectme.sync.message.RedisMessage;
 import com.mojang.authlib.GameProfile;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.api.StatefulRedisConnection;
@@ -15,8 +19,10 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.chat.ChatType;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
+import net.minecraft.network.chat.OutgoingChatMessage;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
@@ -31,9 +37,9 @@ import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.*;
+import java.util.function.Function;
 
 public class Synchronizer implements AutoCloseable {
 
@@ -46,10 +52,8 @@ public class Synchronizer implements AutoCloseable {
         final Map<UUID, RemotePlayerData> players = new HashMap<>();
     }
 
+    private final RedisConnection redisConn;
     private final MinecraftServer server;
-    private final RedisClient redisClient;
-    private final StatefulRedisConnection<String, ByteBuf> redisConn;
-    private final StatefulRedisPubSubConnection<String, ByteBuf> redisSub;
 
     private final Map<UUID, EntityProjection> currentProjections = new HashMap<>();
     private final Map<String, PeerState> peerStates = new HashMap<>();
@@ -58,23 +62,24 @@ public class Synchronizer implements AutoCloseable {
     private final RemoteProfileStore remoteProfiles;
     private final MockPeerSimulator mockSimulator;
 
+    private static final Map<String, Function<ByteBuf, ? extends RedisMessage>> MESSAGE_TYPES = Map.of(
+        PresenceRedisMessage.CHANNEL, PresenceRedisMessage::new,
+        ChatRedisMessage.CHANNEL, ChatRedisMessage::new
+    );
+
     public Synchronizer(String URI, MinecraftServer server) {
-        redisClient = RedisClient.create(URI);
-        redisConn = redisClient.connect(ByteBufCodec.INSTANCE);
-        redisSub = redisClient.connectPubSub(ByteBufCodec.INSTANCE);
-        redisSub.addListener(new Listener());
-        redisSub.sync().subscribe(RedisMessage.COMMAND_CHANNEL);
+        this.redisConn = RedisConnection.create(URI, MESSAGE_TYPES, this);
         this.server = server;
-        this.remoteProfiles = new RemoteProfileStore(redisConn, server::execute);
-        this.mockSimulator = new MockPeerSimulator(remoteProfiles, redisConn);
+        this.remoteProfiles = new RemoteProfileStore(redisConn.get(), server::execute);
+        this.mockSimulator = new MockPeerSimulator(remoteProfiles, redisConn.get());
     }
 
     public void notifyPlayerPresence(List<ServerPlayer> players) {
-        RedisMessage msg = RedisMessage.beginPlayerPresence(players.size());
+        PresenceRedisMessage msg = PresenceRedisMessage.beginPlayerPresence(players.size());
         for (ServerPlayer p : players) {
             msg.andWithPlayer(p, ProjectMe.computePlayerVisibility(p));
         }
-        msg.publishAsync(redisConn);
+        msg.publishAsync(redisConn.get());
 
         // "Defensive" check
         server.execute(() -> {
@@ -311,6 +316,30 @@ public class Synchronizer implements AutoCloseable {
         remoteProfiles.remove(playerUuid);
     }
 
+    public void publishChat(UUID senderUuid, ResourceKey<ChatType> chatTypeKey,
+                            Component senderName, Component chatContent) {
+        ChatRedisMessage msg = ChatRedisMessage.beginChat(server, senderUuid, chatTypeKey, senderName, chatContent);
+        msg.publishAsync(redisConn.get());
+    }
+
+    public void handleRemoteChat(UUID senderUuid, ResourceKey<ChatType> chatTypeKey,
+                                 Component senderName, Component chatContent) {
+        server.execute(() -> {
+            ChatType.Bound bound;
+            try {
+                bound = ChatType.bind(chatTypeKey, server.registryAccess(), senderName);
+            } catch (Exception e) {
+                ProjectMe.LOGGER.warn("Unknown chat type key {}, falling back to CHAT", chatTypeKey, e);
+                bound = ChatType.bind(ChatType.CHAT, server.registryAccess(), senderName);
+            }
+            OutgoingChatMessage disguised = new OutgoingChatMessage.Disguised(chatContent);
+            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                player.sendChatMessage(disguised, false, bound);
+            }
+            server.logChatMessage(chatContent, bound, "Cluster");
+        });
+    }
+
     private void broadcastPacket(Packet<?> packet) {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             player.connection.send(packet);
@@ -327,55 +356,6 @@ public class Synchronizer implements AutoCloseable {
 
     @Override
     public void close() {
-        redisSub.close();
         redisConn.close();
-        redisClient.close();
-    }
-
-    public class Listener implements RedisPubSubListener<String, ByteBuf> {
-        @Override
-        public void message(String channel, ByteBuf rawMessage) {
-            RedisMessage message = new RedisMessage(rawMessage);
-            try {
-                message.handle(Synchronizer.this);
-            } catch (IOException ex) {
-                ProjectMe.LOGGER.error("Redis handler", ex);
-            }
-        }
-
-        @Override public void message(String pattern, String channel, ByteBuf message) { }
-        @Override public void subscribed(String channel, long count) { }
-        @Override public void psubscribed(String pattern, long count) { }
-        @Override public void unsubscribed(String channel, long count) { }
-        @Override public void punsubscribed(String pattern, long count) { }
-    }
-
-    // ── Redis codec ───────────────────────────────────────────────────────
-
-    private static class ByteBufCodec implements RedisCodec<String, ByteBuf> {
-
-        public static ByteBufCodec INSTANCE = new ByteBufCodec();
-
-        @Override
-        public String decodeKey(ByteBuffer bytes) {
-            return StringCodec.UTF8.decodeKey(bytes);
-        }
-
-        @Override
-        public ByteBuf decodeValue(ByteBuffer bytes) {
-            ByteBuf result = Unpooled.buffer(bytes.remaining());
-            result.writeBytes(bytes);
-            return result;
-        }
-
-        @Override
-        public ByteBuffer encodeKey(String key) {
-            return StringCodec.UTF8.encodeKey(key);
-        }
-
-        @Override
-        public ByteBuffer encodeValue(ByteBuf value) {
-            return value.nioBuffer();
-        }
     }
 }

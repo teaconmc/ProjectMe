@@ -5,7 +5,7 @@ import cn.zbx1425.projectme.compat.ICompatibility;
 import cn.zbx1425.projectme.compat.impl.MTRCompatibility;
 import cn.zbx1425.projectme.compat.impl.VanillaCompatibility;
 import cn.zbx1425.projectme.entity.EntityProjection;
-import cn.zbx1425.projectme.sync.RedisMessage;
+import cn.zbx1425.projectme.sync.message.PresenceRedisMessage;
 import cn.zbx1425.projectme.sync.Synchronizer;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.UUIDUtil;
@@ -25,7 +25,6 @@ import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.attachment.AttachmentType;
-import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.entity.EntityAttributeCreationEvent;
@@ -105,7 +104,7 @@ public class ProjectMe {
                 if (synchronizer != null) synchronizer.close();
                 CONFIG.load(event.getServer().getServerDirectory()
                         .resolve("config").resolve("project_me.json"));
-                RedisMessage.setPeerId(CONFIG.peerId.value);
+                PresenceRedisMessage.setPeerId(CONFIG.peerId.value);
                 LOGGER.info("ProjectMe peer ID: {}", CONFIG.peerId.value);
                 synchronizer = new Synchronizer(CONFIG.redisUrl.value, event.getServer());
             } catch (Exception ex) {
