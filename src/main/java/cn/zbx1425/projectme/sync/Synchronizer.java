@@ -256,10 +256,10 @@ public class Synchronizer implements AutoCloseable {
                 // UPDATE_LISTED
                 buf.writeBoolean(true);
                 // UPDATE_LATENCY
-                buf.writeVarInt(-1);
+                buf.writeVarInt(-114514);
                 // UPDATE_DISPLAY_NAME
                 FriendlyByteBuf.writeNullable(buf,
-                        Component.literal(profile.name()).withStyle(ChatFormatting.ITALIC).withStyle(ChatFormatting.DARK_GRAY),
+                        Component.literal(profile.name()).withStyle(ChatFormatting.ITALIC).withStyle(ChatFormatting.GRAY),
                         ComponentSerialization.TRUSTED_STREAM_CODEC);
             }
             return ClientboundPlayerInfoUpdatePacket.STREAM_CODEC.decode(buf);
