@@ -38,7 +38,8 @@ import java.util.*;
 public class Synchronizer implements AutoCloseable {
 
     public record RemotePlayerData(String name, ResourceKey<Level> level, Vec3 position,
-                                   float yRotHead, float yRotBody, float xRot) {}
+                                   float yRotHead, float yRotBody, float xRot,
+                                   boolean visible) {}
 
     static class PeerState {
         long lastUpdateTick;
@@ -54,10 +55,8 @@ public class Synchronizer implements AutoCloseable {
     private final Map<String, PeerState> peerStates = new HashMap<>();
     private final Map<UUID, GameProfile> currentFakeTabEntries = new HashMap<>();
 
-    private static final String REDIS_PROFILES_KEY = "projectme:profiles";
-    private final Set<UUID> profilesWritten = new HashSet<>();
-    private final Map<UUID, GameProfile> knownProfiles = new HashMap<>();
-    private final Map<UUID, Long> profileFetchCooldown = new HashMap<>();
+    private final RemoteProfileStore remoteProfiles;
+    private final MockPeerSimulator mockSimulator;
 
     public Synchronizer(String URI, MinecraftServer server) {
         redisClient = RedisClient.create(URI);
@@ -66,38 +65,18 @@ public class Synchronizer implements AutoCloseable {
         redisSub.addListener(new Listener());
         redisSub.sync().subscribe(RedisMessage.COMMAND_CHANNEL);
         this.server = server;
+        this.remoteProfiles = new RemoteProfileStore(redisConn, server::execute);
+        this.mockSimulator = new MockPeerSimulator(remoteProfiles, redisConn);
     }
 
     public void notifyPlayerPresence(List<ServerPlayer> players) {
-        List<ServerPlayer> visiblePlayers = players.stream()
-                .filter(ProjectMe::computePlayerVisibility)
-                .toList();
-
-        // Write profiles to Redis Hash for new players
-        for (ServerPlayer p : visiblePlayers) {
-            if (profilesWritten.add(p.getGameProfile().id())) {
-                ByteBuf buf = Unpooled.buffer();
-                try {
-                    ByteBufCodecs.GAME_PROFILE.encode(buf, p.getGameProfile());
-                    redisConn.async().hset(REDIS_PROFILES_KEY, p.getGameProfile().id().toString(), buf);
-                } catch (Exception e) {
-                    buf.release();
-                    ProjectMe.LOGGER.warn("Failed to write profile for {}", p.getGameProfile().id(), e);
-                }
-            }
-        }
-        Set<UUID> visibleUuids = new HashSet<>();
-        for (ServerPlayer p : visiblePlayers) {
-            visibleUuids.add(p.getGameProfile().id());
-        }
-        profilesWritten.retainAll(visibleUuids);
-
-        RedisMessage msg = RedisMessage.beginPlayerPresence(visiblePlayers.size());
-        for (ServerPlayer p : visiblePlayers) {
-            msg.andWithPlayer(p);
+        RedisMessage msg = RedisMessage.beginPlayerPresence(players.size());
+        for (ServerPlayer p : players) {
+            msg.andWithPlayer(p, ProjectMe.computePlayerVisibility(p));
         }
         msg.publishAsync(redisConn);
 
+        // "Defensive" check
         server.execute(() -> {
             for (ServerPlayer p : players) {
                 UUID uuid = p.getGameProfile().id();
@@ -109,8 +88,7 @@ public class Synchronizer implements AutoCloseable {
     }
 
     public void mockPlayerPresence() {
-        RedisMessage message = RedisMessage.mockPlayerPresence();
-        message.publishAsync(redisConn);
+        mockSimulator.tick();
     }
 
     public void handlePeerPresence(String peerId, Map<UUID, RemotePlayerData> newPlayers) {
@@ -119,86 +97,59 @@ public class Synchronizer implements AutoCloseable {
             state.lastUpdateTick = server.getTickCount();
             state.players.clear();
             state.players.putAll(newPlayers);
-
-            reconcileGlobalState();
         });
     }
 
-    public void checkPeerTimeouts(long currentTick) {
+    public void tick(long currentTick) {
         int timeout = ProjectMe.CONFIG.peerTimeout.value;
-        boolean anyRemoved = peerStates.entrySet().removeIf(
-                entry -> currentTick - entry.getValue().lastUpdateTick > timeout
+        peerStates.entrySet().removeIf(entry -> 
+            currentTick - entry.getValue().lastUpdateTick > timeout
         );
-        if (anyRemoved) {
-            reconcileGlobalState();
-        }
+        updateGlobalState();
     }
 
-    private void reconcileGlobalState() {
-        Map<UUID, RemotePlayerData> allRemote = new HashMap<>();
+    private void updateGlobalState() {
+        Map<UUID, RemotePlayerData> allRemotes = new HashMap<>();
         for (PeerState ps : peerStates.values()) {
-            allRemote.putAll(ps.players);
+            allRemotes.putAll(ps.players);
         }
 
-        // Trigger async profile fetches for new remote UUIDs
-        long currentTick = server.getTickCount();
-        for (UUID uuid : allRemote.keySet()) {
-            if (!knownProfiles.containsKey(uuid)
-                    && server.getPlayerList().getPlayer(uuid) == null) {
-                Long cooldown = profileFetchCooldown.get(uuid);
-                if (cooldown == null || currentTick >= cooldown) {
-                    fetchProfileFromRedis(uuid);
-                    profileFetchCooldown.put(uuid, currentTick + 20);
-                }
+        for (UUID uuid : allRemotes.keySet()) {
+            if (server.getPlayerList().getPlayer(uuid) == null) {
+                remoteProfiles.fetchProfileIfNeeded(uuid);
             }
         }
-        knownProfiles.keySet().retainAll(allRemote.keySet());
-        profileFetchCooldown.keySet().retainAll(allRemote.keySet());
+        remoteProfiles.retainOnly(allRemotes.keySet());
 
-        // Only process players whose profiles have been resolved
-        Map<UUID, RemotePlayerData> readyRemote = new HashMap<>();
-        for (var entry : allRemote.entrySet()) {
-            if (knownProfiles.containsKey(entry.getKey())) {
-                readyRemote.put(entry.getKey(), entry.getValue());
+        Map<UUID, RemotePlayerData> readyRemotes = new HashMap<>();
+        for (var entry : allRemotes.entrySet()) {
+            if (remoteProfiles.hasProfile(entry.getKey())) {
+                readyRemotes.put(entry.getKey(), entry.getValue());
             }
         }
 
-        reconcileProjections(readyRemote);
-        reconcileFakeTabEntries(readyRemote);
+        updateProjections(readyRemotes);
+        updateFakeTabEntries(readyRemotes);
     }
 
-    private void fetchProfileFromRedis(UUID uuid) {
-        redisConn.async().hget(REDIS_PROFILES_KEY, uuid.toString())
-                .whenComplete((profileBytes, ex) -> {
-                    server.execute(() -> {
-                        if (profileBytes != null && ex == null) {
-                            try {
-                                GameProfile profile = ByteBufCodecs.GAME_PROFILE.decode(profileBytes);
-                                knownProfiles.put(uuid, profile);
-                                reconcileGlobalState();
-                            } finally {
-                                profileBytes.release();
-                            }
-                        }
-                    });
-                });
-    }
-
-    private void reconcileProjections(Map<UUID, RemotePlayerData> allRemote) {
+    private void updateProjections(Map<UUID, RemotePlayerData> remotes) {
         currentProjections.entrySet().removeIf(entry -> {
             UUID uuid = entry.getKey();
-            if (!allRemote.containsKey(uuid) || server.getPlayerList().getPlayer(uuid) != null) {
+            RemotePlayerData data = remotes.get(uuid);
+            if (data == null || !data.visible()
+                    || server.getPlayerList().getPlayer(uuid) != null) {
                 entry.getValue().discard();
                 return true;
             }
             return false;
         });
 
-        for (var entry : allRemote.entrySet()) {
+        for (var entry : remotes.entrySet()) {
             UUID uuid = entry.getKey();
             RemotePlayerData data = entry.getValue();
 
             if (server.getPlayerList().getPlayer(uuid) != null) continue;
+            if (!data.visible()) continue;
 
             EntityProjection currentEntity = currentProjections.get(uuid);
             if (currentEntity == null || currentEntity.isRemoved()
@@ -233,11 +184,11 @@ public class Synchronizer implements AutoCloseable {
         }
     }
 
-    private void reconcileFakeTabEntries(Map<UUID, RemotePlayerData> allRemote) {
+    private void updateFakeTabEntries(Map<UUID, RemotePlayerData> remotes) {
         Map<UUID, GameProfile> desired = new HashMap<>();
-        for (var entry : allRemote.entrySet()) {
+        for (var entry : remotes.entrySet()) {
             if (server.getPlayerList().getPlayer(entry.getKey()) == null) {
-                GameProfile profile = knownProfiles.get(entry.getKey());
+                GameProfile profile = remoteProfiles.getProfile(entry.getKey());
                 if (profile != null) {
                     desired.put(entry.getKey(), profile);
                 }
@@ -322,13 +273,14 @@ public class Synchronizer implements AutoCloseable {
     public void onLocalPlayerJoin(ServerPlayer player) {
         UUID uuid = player.getGameProfile().id();
 
+        remoteProfiles.writeProfile(uuid, player.getGameProfile());
+
         EntityProjection proj = currentProjections.remove(uuid);
         if (proj != null) proj.discard();
 
         boolean hadFakeEntry = currentFakeTabEntries.containsKey(uuid);
         currentFakeTabEntries.remove(uuid);
-        knownProfiles.remove(uuid);
-        profileFetchCooldown.remove(uuid);
+        remoteProfiles.remove(uuid);
 
         if (hadFakeEntry) {
             // Client putIfAbsent prevented vanilla's ADD_PLAYER from replacing our fake entry.
@@ -356,14 +308,7 @@ public class Synchronizer implements AutoCloseable {
 
     public void onLocalPlayerLeave(UUID playerUuid) {
         currentFakeTabEntries.remove(playerUuid);
-        knownProfiles.remove(playerUuid);
-        profileFetchCooldown.remove(playerUuid);
-
-        // Remove profile from Redis Hash
-        profilesWritten.remove(playerUuid);
-        redisConn.async().hdel(REDIS_PROFILES_KEY, playerUuid.toString());
-
-        server.execute(this::reconcileGlobalState);
+        remoteProfiles.remove(playerUuid);
     }
 
     private void broadcastPacket(Packet<?> packet) {

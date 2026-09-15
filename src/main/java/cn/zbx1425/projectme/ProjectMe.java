@@ -131,7 +131,7 @@ public class ProjectMe {
                 synchronizer.notifyPlayerPresence(event.getServer().getPlayerList().getPlayers());
 //                synchronizer.mockPlayerPresence();
             }
-            synchronizer.checkPeerTimeouts(event.getServer().getTickCount());
+            synchronizer.tick(event.getServer().getTickCount());
         }
 
         @SubscribeEvent
