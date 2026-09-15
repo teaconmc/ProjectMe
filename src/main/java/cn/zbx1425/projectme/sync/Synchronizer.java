@@ -2,7 +2,7 @@ package cn.zbx1425.projectme.sync;
 
 import cn.zbx1425.projectme.ProjectMe;
 import cn.zbx1425.projectme.entity.EntityProjection;
-import com.mojang.authlib.properties.PropertyMap;
+import com.mojang.authlib.GameProfile;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.codec.RedisCodec;
@@ -52,7 +52,12 @@ public class Synchronizer implements AutoCloseable {
 
     private final Map<UUID, EntityProjection> currentProjections = new HashMap<>();
     private final Map<String, PeerState> peerStates = new HashMap<>();
-    private final Map<UUID, String> currentFakeTabEntries = new HashMap<>();
+    private final Map<UUID, GameProfile> currentFakeTabEntries = new HashMap<>();
+
+    private static final String REDIS_PROFILES_KEY = "projectme:profiles";
+    private final Set<UUID> profilesWritten = new HashSet<>();
+    private final Map<UUID, GameProfile> knownProfiles = new HashMap<>();
+    private final Map<UUID, Long> profileFetchCooldown = new HashMap<>();
 
     public Synchronizer(String URI, MinecraftServer server) {
         redisClient = RedisClient.create(URI);
@@ -67,6 +72,25 @@ public class Synchronizer implements AutoCloseable {
         List<ServerPlayer> visiblePlayers = players.stream()
                 .filter(ProjectMe::computePlayerVisibility)
                 .toList();
+
+        // Write profiles to Redis Hash for new players
+        for (ServerPlayer p : visiblePlayers) {
+            if (profilesWritten.add(p.getGameProfile().id())) {
+                ByteBuf buf = Unpooled.buffer();
+                try {
+                    ByteBufCodecs.GAME_PROFILE.encode(buf, p.getGameProfile());
+                    redisConn.async().hset(REDIS_PROFILES_KEY, p.getGameProfile().id().toString(), buf);
+                } catch (Exception e) {
+                    buf.release();
+                    ProjectMe.LOGGER.warn("Failed to write profile for {}", p.getGameProfile().id(), e);
+                }
+            }
+        }
+        Set<UUID> visibleUuids = new HashSet<>();
+        for (ServerPlayer p : visiblePlayers) {
+            visibleUuids.add(p.getGameProfile().id());
+        }
+        profilesWritten.retainAll(visibleUuids);
 
         RedisMessage msg = RedisMessage.beginPlayerPresence(visiblePlayers.size());
         for (ServerPlayer p : visiblePlayers) {
@@ -115,8 +139,49 @@ public class Synchronizer implements AutoCloseable {
         for (PeerState ps : peerStates.values()) {
             allRemote.putAll(ps.players);
         }
-        reconcileProjections(allRemote);
-        reconcileFakeTabEntries(allRemote);
+
+        // Trigger async profile fetches for new remote UUIDs
+        long currentTick = server.getTickCount();
+        for (UUID uuid : allRemote.keySet()) {
+            if (!knownProfiles.containsKey(uuid)
+                    && server.getPlayerList().getPlayer(uuid) == null) {
+                Long cooldown = profileFetchCooldown.get(uuid);
+                if (cooldown == null || currentTick >= cooldown) {
+                    fetchProfileFromRedis(uuid);
+                    profileFetchCooldown.put(uuid, currentTick + 20);
+                }
+            }
+        }
+        knownProfiles.keySet().retainAll(allRemote.keySet());
+        profileFetchCooldown.keySet().retainAll(allRemote.keySet());
+
+        // Only process players whose profiles have been resolved
+        Map<UUID, RemotePlayerData> readyRemote = new HashMap<>();
+        for (var entry : allRemote.entrySet()) {
+            if (knownProfiles.containsKey(entry.getKey())) {
+                readyRemote.put(entry.getKey(), entry.getValue());
+            }
+        }
+
+        reconcileProjections(readyRemote);
+        reconcileFakeTabEntries(readyRemote);
+    }
+
+    private void fetchProfileFromRedis(UUID uuid) {
+        redisConn.async().hget(REDIS_PROFILES_KEY, uuid.toString())
+                .whenComplete((profileBytes, ex) -> {
+                    server.execute(() -> {
+                        if (profileBytes != null && ex == null) {
+                            try {
+                                GameProfile profile = ByteBufCodecs.GAME_PROFILE.decode(profileBytes);
+                                knownProfiles.put(uuid, profile);
+                                reconcileGlobalState();
+                            } finally {
+                                profileBytes.release();
+                            }
+                        }
+                    });
+                });
     }
 
     private void reconcileProjections(Map<UUID, RemotePlayerData> allRemote) {
@@ -169,17 +234,20 @@ public class Synchronizer implements AutoCloseable {
     }
 
     private void reconcileFakeTabEntries(Map<UUID, RemotePlayerData> allRemote) {
-        Map<UUID, String> desired = new HashMap<>();
+        Map<UUID, GameProfile> desired = new HashMap<>();
         for (var entry : allRemote.entrySet()) {
             if (server.getPlayerList().getPlayer(entry.getKey()) == null) {
-                desired.put(entry.getKey(), entry.getValue().name());
+                GameProfile profile = knownProfiles.get(entry.getKey());
+                if (profile != null) {
+                    desired.put(entry.getKey(), profile);
+                }
             }
         }
 
-        Map<UUID, String> toSend = new HashMap<>();
+        Map<UUID, GameProfile> toSend = new HashMap<>();
         for (var entry : desired.entrySet()) {
-            String currentName = currentFakeTabEntries.get(entry.getKey());
-            if (currentName == null || !currentName.equals(entry.getValue())) {
+            GameProfile current = currentFakeTabEntries.get(entry.getKey());
+            if (current == null || !current.equals(entry.getValue())) {
                 toSend.put(entry.getKey(), entry.getValue());
             }
         }
@@ -192,18 +260,29 @@ public class Synchronizer implements AutoCloseable {
         toRemove.removeAll(desired.keySet());
         toRemove.removeIf(uuid -> server.getPlayerList().getPlayer(uuid) != null);
 
+        // Entries that changed profile need REMOVE + re-ADD (client putIfAbsent ignores second ADD)
+        Set<UUID> toUpdate = new HashSet<>();
+        for (UUID uuid : toSend.keySet()) {
+            if (currentFakeTabEntries.containsKey(uuid)) {
+                toUpdate.add(uuid);
+            }
+        }
+
+        if (!toRemove.isEmpty() || !toUpdate.isEmpty()) {
+            Set<UUID> allRemoveIds = new HashSet<>(toRemove);
+            allRemoveIds.addAll(toUpdate);
+            broadcastPacket(new ClientboundPlayerInfoRemovePacket(new ArrayList<>(allRemoveIds)));
+        }
+
         if (!toSend.isEmpty()) {
             broadcastPacket(createFakePlayerInfoPacket(toSend));
-        }
-        if (!toRemove.isEmpty()) {
-            broadcastPacket(new ClientboundPlayerInfoRemovePacket(new ArrayList<>(toRemove)));
         }
 
         currentFakeTabEntries.clear();
         currentFakeTabEntries.putAll(desired);
     }
 
-    private ClientboundPlayerInfoUpdatePacket createFakePlayerInfoPacket(Map<UUID, String> entries) {
+    private ClientboundPlayerInfoUpdatePacket createFakePlayerInfoPacket(Map<UUID, GameProfile> entries) {
         EnumSet<ClientboundPlayerInfoUpdatePacket.Action> actions = EnumSet.of(
                 ClientboundPlayerInfoUpdatePacket.Action.ADD_PLAYER,
                 ClientboundPlayerInfoUpdatePacket.Action.UPDATE_GAME_MODE,
@@ -219,18 +298,19 @@ public class Synchronizer implements AutoCloseable {
             buf.writeVarInt(entries.size());
             for (var entry : entries.entrySet()) {
                 buf.writeUUID(entry.getKey());
-                // ADD_PLAYER: name + empty properties (client resolves skin via UUID)
-                ByteBufCodecs.PLAYER_NAME.encode(buf, entry.getValue());
-                ByteBufCodecs.GAME_PROFILE_PROPERTIES.encode(buf, PropertyMap.EMPTY);
+                // ADD_PLAYER
+                GameProfile profile = entry.getValue();
+                ByteBufCodecs.PLAYER_NAME.encode(buf, profile.name());
+                ByteBufCodecs.GAME_PROFILE_PROPERTIES.encode(buf, profile.properties());
                 // UPDATE_GAME_MODE
-                buf.writeVarInt(GameType.SURVIVAL.getId());
+                buf.writeVarInt(GameType.ADVENTURE.getId());
                 // UPDATE_LISTED
                 buf.writeBoolean(true);
                 // UPDATE_LATENCY
                 buf.writeVarInt(-1);
                 // UPDATE_DISPLAY_NAME
                 FriendlyByteBuf.writeNullable(buf,
-                        Component.literal(entry.getValue()).withStyle(ChatFormatting.ITALIC).withStyle(ChatFormatting.GRAY),
+                        Component.literal(profile.name()).withStyle(ChatFormatting.ITALIC).withStyle(ChatFormatting.DARK_GRAY),
                         ComponentSerialization.TRUSTED_STREAM_CODEC);
             }
             return ClientboundPlayerInfoUpdatePacket.STREAM_CODEC.decode(buf);
@@ -241,16 +321,34 @@ public class Synchronizer implements AutoCloseable {
 
     public void onLocalPlayerJoin(ServerPlayer player) {
         UUID uuid = player.getGameProfile().id();
+
         EntityProjection proj = currentProjections.remove(uuid);
         if (proj != null) proj.discard();
+
+        boolean hadFakeEntry = currentFakeTabEntries.containsKey(uuid);
         currentFakeTabEntries.remove(uuid);
+        knownProfiles.remove(uuid);
+        profileFetchCooldown.remove(uuid);
+
+        if (hadFakeEntry) {
+            // Client putIfAbsent prevented vanilla's ADD_PLAYER from replacing our fake entry.
+            // Send REMOVE then re-ADD with the real player's full profile.
+            Packet<?> removePacket = new ClientboundPlayerInfoRemovePacket(List.of(uuid));
+            Packet<?> addPacket = ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(List.of(player));
+            for (ServerPlayer other : server.getPlayerList().getPlayers()) {
+                if (!other.getUUID().equals(uuid)) {
+                    other.connection.send(removePacket);
+                    other.connection.send(addPacket);
+                }
+            }
+        }
 
         sendAllFakeTabEntriesToPlayer(player);
     }
 
     public void sendAllFakeTabEntriesToPlayer(ServerPlayer player) {
         if (currentFakeTabEntries.isEmpty()) return;
-        Map<UUID, String> toSend = new HashMap<>(currentFakeTabEntries);
+        Map<UUID, GameProfile> toSend = new HashMap<>(currentFakeTabEntries);
         toSend.keySet().removeIf(uuid -> server.getPlayerList().getPlayer(uuid) != null);
         if (toSend.isEmpty()) return;
         player.connection.send(createFakePlayerInfoPacket(toSend));
@@ -258,6 +356,13 @@ public class Synchronizer implements AutoCloseable {
 
     public void onLocalPlayerLeave(UUID playerUuid) {
         currentFakeTabEntries.remove(playerUuid);
+        knownProfiles.remove(playerUuid);
+        profileFetchCooldown.remove(playerUuid);
+
+        // Remove profile from Redis Hash
+        profilesWritten.remove(playerUuid);
+        redisConn.async().hdel(REDIS_PROFILES_KEY, playerUuid.toString());
+
         server.execute(this::reconcileGlobalState);
     }
 
