@@ -5,5 +5,13 @@
 
   "config.jade.plugin_project_me.projection_entity_tooltip": "玩家投影",
   "project_me.projection_entity.tooltip": "位于其他分服务器的玩家",
-  "project_me.projection_entity.tooltip_hint_1": "隐藏它: /pme"
+  "project_me.projection_entity.tooltip_hint_1": "隐藏它: /pme",
+
+  "project_me.command.info.welcome": "ProjectMe 欢迎您来到集群！",
+  "project_me.command.info.not_configured": "ProjectMe 尚未配置。",
+  "project_me.command.info.total_singular": "共有 %s 名玩家已连接至此集群。",
+  "project_me.command.info.total_plural": "共有 %s 名玩家已连接至此集群。",
+  "project_me.command.info.peers_singular": "本服务器已连接到集群内 %s 个其他活动容器组。",
+  "project_me.command.info.peers_plural": "本服务器已连接到集群内 %s 个其他活动容器组。",
+  "project_me.command.info.you_are_at": "您位于： %s"
 }

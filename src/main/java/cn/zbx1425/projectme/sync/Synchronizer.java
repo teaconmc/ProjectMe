@@ -350,6 +350,18 @@ public class Synchronizer implements AutoCloseable {
         return peerStates.size();
     }
 
+    public Map<String, Map<UUID, String>> snapshotRemotePlayers() {
+        Map<String, Map<UUID, String>> snapshot = new HashMap<>();
+        for (var entry : peerStates.entrySet()) {
+            Map<UUID, String> players = new HashMap<>();
+            for (var player : entry.getValue().players.entrySet()) {
+                players.put(player.getKey(), player.getValue().name());
+            }
+            snapshot.put(entry.getKey(), players);
+        }
+        return snapshot;
+    }
+
     @Override
     public void close() {
         redisConn.close();

@@ -7,11 +7,9 @@ import cn.zbx1425.projectme.compat.impl.VanillaCompatibility;
 import cn.zbx1425.projectme.entity.EntityProjection;
 import cn.zbx1425.projectme.sync.Synchronizer;
 import cn.zbx1425.projectme.sync.message.RedisMessage;
-import net.minecraft.commands.Commands;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataSerializer;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
@@ -148,19 +146,7 @@ public class ProjectMe {
 
         @SubscribeEvent
         public static void registerCommands(RegisterCommandsEvent event) {
-            event.getDispatcher().register(Commands.literal("projectmes").then(
-                Commands.literal("info").executes(ctx -> {
-                    if (synchronizer == null) {
-                        ctx.getSource().sendFailure(Component.literal("ProjectMe is not configured."));
-                        return 0;
-                    }
-                    ctx.getSource().sendSystemMessage(Component.literal(
-                        "ProjectMe on pod " + CONFIG.peerId.value + " welcomes you to the cluster!"));
-                    ctx.getSource().sendSystemMessage(Component.literal(
-                        "They have met " + synchronizer.getPeerCount() + " peers."));
-                    return 1;
-                })
-            ));
+            ServerCommand.register(event.getDispatcher());
         }
     }
 

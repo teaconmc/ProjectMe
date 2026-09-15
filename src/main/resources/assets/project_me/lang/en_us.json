@@ -5,5 +5,13 @@
 
   "config.jade.plugin_project_me.projection_entity_tooltip": "Player Projection",
   "project_me.projection_entity.tooltip": "Player in another sub-server",
-  "project_me.projection_entity.tooltip_hint_1": "Hide: '/pme'"
+  "project_me.projection_entity.tooltip_hint_1": "Hide: '/pme'",
+
+  "project_me.command.info.welcome": "ProjectMe welcomes you to the cluster!",
+  "project_me.command.info.not_configured": "ProjectMe is not configured.",
+  "project_me.command.info.total_singular": "%s player is currently connected to the cluster.",
+  "project_me.command.info.total_plural": "%s players are currently connected to the cluster.",
+  "project_me.command.info.peers_singular": "This server is connected to %s other active container group in the cluster.",
+  "project_me.command.info.peers_plural": "This server is connected to %s other active container groups in the cluster.",
+  "project_me.command.info.you_are_at": "You are at: %s"
 }
